@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+motor
+chromadb
+redis
+celery
+sentence-transformers
+pydantic
+pydantic-settings
+huggingface-hub
+google-generativeai
+bertopic
+hdbscan
+umap-learn
+networkx
+scikit-learn
+python-multipart
