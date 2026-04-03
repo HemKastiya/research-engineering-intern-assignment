@@ -2,8 +2,10 @@ import type {
   Post,
   SearchResult,
   TimeSeriesPoint,
+  TimeSeriesAnalytics,
   ClusterResult,
   GraphResult,
+  NetworkGraphType,
   IngestStatus,
 } from "@/types";
 
@@ -87,6 +89,18 @@ export async function getTimeSeries(params: TimeSeriesParams = {}): Promise<Time
   return fetchJson<TimeSeriesPoint[]>(`/api/timeseries/${qs ? "?" + qs : ""}`);
 }
 
+export async function getTimeSeriesAnalytics(
+  params: TimeSeriesParams = {}
+): Promise<TimeSeriesAnalytics> {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v))
+  ).toString();
+  // Analytics can include aggregation + ML transforms; allow a wider timeout window.
+  return fetchJson<TimeSeriesAnalytics>(`/api/timeseries/analytics${qs ? "?" + qs : ""}`, {
+    timeoutMs: 60_000,
+  });
+}
+
 export async function getTimeSeriesSummary(
   query?: string,
   subreddit?: string
@@ -135,9 +149,10 @@ export async function getEmbeddings(n_topics = 10): Promise<EmbeddingsResult> {
 
 // ── Network ───────────────────────────────────────────────────────────────────
 export interface NetworkParams {
-  subreddit?: string;
   query?: string;
-  min_edge_weight?: number;
+  graph_type?: NetworkGraphType;
+  top_n?: number;
+  max_nodes?: number;
 }
 
 export async function getNetwork(params: NetworkParams = {}): Promise<GraphResult> {
@@ -147,20 +162,6 @@ export async function getNetwork(params: NetworkParams = {}): Promise<GraphResul
   const qs = new URLSearchParams(entries).toString();
   return fetchJson<GraphResult>(`/api/network${qs ? "?" + qs : ""}`, {
     timeoutMs: 30_000,
-  });
-}
-
-export async function deleteNetworkNode(
-  authorId: string,
-  params: { subreddit?: string; query?: string } = {}
-): Promise<GraphResult> {
-  const qs = new URLSearchParams(
-    Object.fromEntries(
-      Object.entries(params).filter(([, v]) => v)
-    ) as Record<string, string>
-  ).toString();
-  return fetchJson<GraphResult>(`/api/network/node/${encodeURIComponent(authorId)}${qs ? "?" + qs : ""}`, {
-    method: "DELETE",
   });
 }
 

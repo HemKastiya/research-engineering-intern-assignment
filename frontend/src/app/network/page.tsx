@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { getNetwork, deleteNetworkNode, NetworkParams } from "@/lib/api";
-import { NetworkNode, NetworkEdge, GraphResult } from "@/types";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { getNetwork, NetworkParams } from "@/lib/api";
+import { computePageRank } from "@/lib/network";
+import {
+  GraphResult,
+  NetworkGraphType,
+  NetworkNode,
+} from "@/types";
 import dynamic from "next/dynamic";
 import GraphControls from "@/components/network/GraphControls";
 import NodeSidebar from "@/components/network/NodeSidebar";
@@ -10,38 +15,134 @@ import SectionHeading from "@/components/ui/SectionHeading";
 import ErrorBanner from "@/components/ui/ErrorBanner";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 
-// Sigma uses canvas; must be client-only
 const NetworkGraph = dynamic(
   () => import("@/components/network/NetworkGraph"),
   { ssr: false, loading: () => <LoadingSkeleton variant="chart" /> }
 );
 
+const DEFAULT_GRAPH_TYPE: NetworkGraphType = "co_subreddit";
+const DEFAULT_TOP_N = 150;
+
+function emptyGraph(graphType: NetworkGraphType): GraphResult {
+  return {
+    nodes: [],
+    edges: [],
+    meta: {
+      graph_type: graphType,
+      query: null,
+      top_n: DEFAULT_TOP_N,
+      max_nodes: 200,
+      total_nodes_before_limit: 0,
+      total_edges_before_limit: 0,
+      returned_nodes: 0,
+      returned_edges: 0,
+      truncated: false,
+      truncation_note: null,
+      corpus_hash: "",
+      computed_at: "",
+      backbone_computed_at: "",
+    },
+  };
+}
+
+function applyClientFilters(
+  sourceGraph: GraphResult,
+  removedNodeIds: Set<string>,
+  minEdgeWeight: number,
+  minDegree: number
+): GraphResult {
+  const activeNodes = sourceGraph.nodes.filter((node) => !removedNodeIds.has(node.id));
+  const activeNodeIds = new Set(activeNodes.map((node) => node.id));
+
+  let filteredEdges = sourceGraph.edges.filter((edge) => {
+    if (edge.weight < minEdgeWeight) return false;
+    return activeNodeIds.has(edge.source) && activeNodeIds.has(edge.target);
+  });
+
+  let filteredNodes = activeNodes;
+  if (minDegree > 0) {
+    const degreeMap = new Map<string, number>();
+    filteredNodes.forEach((node) => degreeMap.set(node.id, 0));
+    filteredEdges.forEach((edge) => {
+      degreeMap.set(edge.source, (degreeMap.get(edge.source) ?? 0) + 1);
+      degreeMap.set(edge.target, (degreeMap.get(edge.target) ?? 0) + 1);
+    });
+
+    const keepNodes = new Set(
+      Array.from(degreeMap.entries())
+        .filter(([, degree]) => degree >= minDegree)
+        .map(([nodeId]) => nodeId)
+    );
+
+    filteredNodes = filteredNodes.filter((node) => keepNodes.has(node.id));
+    filteredEdges = filteredEdges.filter(
+      (edge) => keepNodes.has(edge.source) && keepNodes.has(edge.target)
+    );
+  }
+
+  const recomputedPageRank = computePageRank(
+    filteredNodes.map((node) => node.id),
+    filteredEdges,
+    sourceGraph.meta.graph_type
+  );
+
+  const nodesWithUpdatedRank = filteredNodes
+    .map((node) => ({
+      ...node,
+      pagerank_score: recomputedPageRank[node.id] ?? 0,
+    }))
+    .sort((left, right) => right.pagerank_score - left.pagerank_score);
+
+  return {
+    ...sourceGraph,
+    nodes: nodesWithUpdatedRank,
+    edges: filteredEdges,
+    meta: {
+      ...sourceGraph.meta,
+      returned_nodes: nodesWithUpdatedRank.length,
+      returned_edges: filteredEdges.length,
+      computed_at: new Date().toISOString(),
+    },
+  };
+}
+
 export default function NetworkPage() {
-  const [subreddit, setSubreddit] = useState("");
+  const [keywordInput, setKeywordInput] = useState("");
+  const [keywordQuery, setKeywordQuery] = useState("");
+  const [graphType, setGraphType] = useState<NetworkGraphType>(DEFAULT_GRAPH_TYPE);
+  const [topN, setTopN] = useState(DEFAULT_TOP_N);
   const [minEdgeWeight, setMinEdgeWeight] = useState(1);
-  const [graph, setGraph] = useState<GraphResult>({ nodes: [], edges: [] });
+  const [minDegree, setMinDegree] = useState(0);
+  const [sourceGraph, setSourceGraph] = useState<GraphResult | null>(null);
+  const [removedNodeIds, setRemovedNodeIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRemoving, setIsRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [debouncedParams, setDebouncedParams] = useState<NetworkParams>({ min_edge_weight: 1 });
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      setDebouncedParams({
-        subreddit: subreddit || undefined,
-        min_edge_weight: minEdgeWeight,
-      });
-    }, 500);
-    return () => clearTimeout(id);
-  }, [subreddit, minEdgeWeight]);
+    const timeoutId = setTimeout(() => {
+      setKeywordQuery(keywordInput.trim());
+    }, 350);
+    return () => clearTimeout(timeoutId);
+  }, [keywordInput]);
+
+  const requestParams = useMemo<NetworkParams>(
+    () => ({
+      query: keywordQuery || undefined,
+      graph_type: graphType,
+      top_n: topN,
+    }),
+    [keywordQuery, graphType, topN]
+  );
 
   const fetchGraph = useCallback(async (params: NetworkParams) => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await getNetwork(params);
-      setGraph(data);
+      setSourceGraph(data);
+      setRemovedNodeIds([]);
+      setSelectedNodeId(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load network");
     } finally {
@@ -50,89 +151,120 @@ export default function NetworkPage() {
   }, []);
 
   useEffect(() => {
-    fetchGraph(debouncedParams);
-  }, [debouncedParams, fetchGraph]);
+    fetchGraph(requestParams);
+  }, [requestParams, fetchGraph]);
 
-  const handleRemoveNode = async () => {
-    if (!selectedNodeId) return;
-    setIsRemoving(true);
-    try {
-      // Optimistic update
-      const prev = graph;
-      setGraph({
-        nodes: graph.nodes.filter((n) => n.id !== selectedNodeId),
-        edges: graph.edges.filter(
-          (e) => e.source !== selectedNodeId && e.target !== selectedNodeId
-        ),
-      });
+  const maxEdgeWeight = useMemo(() => {
+    const graph = sourceGraph;
+    if (!graph || graph.edges.length === 0) return 1;
+    const highest = Math.max(...graph.edges.map((edge) => edge.weight || 1));
+    return Math.max(1, Math.ceil(highest));
+  }, [sourceGraph]);
+
+  useEffect(() => {
+    setMinEdgeWeight((prev) => Math.min(Math.max(1, prev), maxEdgeWeight));
+  }, [maxEdgeWeight]);
+
+  const graph = useMemo(() => {
+    if (!sourceGraph) return emptyGraph(graphType);
+    return applyClientFilters(
+      sourceGraph,
+      new Set(removedNodeIds),
+      minEdgeWeight,
+      minDegree
+    );
+  }, [sourceGraph, removedNodeIds, minEdgeWeight, minDegree, graphType]);
+
+  useEffect(() => {
+    if (selectedNodeId && !graph.nodes.some((node) => node.id === selectedNodeId)) {
       setSelectedNodeId(null);
-      const updated = await deleteNetworkNode(selectedNodeId, debouncedParams);
-      setGraph(updated);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to remove node");
-      // Rollback by refetching
-      fetchGraph(debouncedParams);
-    } finally {
-      setIsRemoving(false);
     }
-  };
+  }, [selectedNodeId, graph.nodes]);
 
-  const selectedNode = graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const handleRemoveNode = useCallback(() => {
+    if (!selectedNodeId) return;
+    setRemovedNodeIds((prev) =>
+      prev.includes(selectedNodeId) ? prev : [...prev, selectedNodeId]
+    );
+    setSelectedNodeId(null);
+  }, [selectedNodeId]);
+
+  const handleResetRemoved = useCallback(() => {
+    setRemovedNodeIds([]);
+  }, []);
+
+  const selectedNode: NetworkNode | null =
+    graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const topAuthor = graph.nodes[0];
 
   return (
     <div>
       <SectionHeading kicker="Graph Analysis" title="Author Interaction Network" />
 
       <GraphControls
-        subreddit={subreddit}
-        onSubredditChange={setSubreddit}
+        keyword={keywordInput}
+        onKeywordChange={setKeywordInput}
+        graphType={graphType}
+        onGraphTypeChange={setGraphType}
+        topN={topN}
+        onTopNChange={setTopN}
         minEdgeWeight={minEdgeWeight}
+        maxEdgeWeight={maxEdgeWeight}
         onMinEdgeWeightChange={setMinEdgeWeight}
+        minDegree={minDegree}
+        onMinDegreeChange={setMinDegree}
         selectedNode={selectedNodeId}
         onRemoveNode={handleRemoveNode}
-        isRemoving={isRemoving}
+        removedCount={removedNodeIds.length}
+        onResetRemoved={handleResetRemoved}
       />
 
       {error && (
         <div className="mb-4">
-          <ErrorBanner message={error} onRetry={() => fetchGraph(debouncedParams)} />
+          <ErrorBanner message={error} onRetry={() => fetchGraph(requestParams)} />
         </div>
       )}
 
-      <div className="flex gap-0 border border-rule rounded overflow-hidden" style={{ height: "560px" }}>
-        {/* Graph canvas — 70% */}
-        <div className="flex-[7] relative">
+      <div
+        className="flex gap-0 overflow-hidden rounded border border-rule"
+        style={{ height: "560px" }}
+      >
+        <div className="relative flex-[7]">
           {isLoading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-wash">
               <div className="text-center">
-                <div className="w-8 h-8 border-2 border-ink border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                <p className="byline">Loading graph…</p>
+                <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+                <p className="byline">Loading graph...</p>
               </div>
             </div>
           ) : (
             <NetworkGraph
               nodes={graph.nodes}
               edges={graph.edges}
+              graphType={graph.meta.graph_type}
               onNodeClick={setSelectedNodeId}
             />
           )}
         </div>
 
-        {/* Sidebar — 30% */}
-        <div className="flex-[3] border-l border-rule bg-paper overflow-hidden">
+        <div className="flex-[3] overflow-hidden border-l border-rule bg-paper">
           <NodeSidebar node={selectedNode} onClose={() => setSelectedNodeId(null)} />
         </div>
       </div>
 
-      <div className="mt-3 flex gap-6">
-        <p className="data-label">{graph.nodes.length} nodes</p>
-        <p className="data-label">{graph.edges.length} edges</p>
-        {graph.nodes.length > 0 && (
-          <p className="data-label">
-            Top author: {graph.nodes.sort((a, b) => (b.pagerank_score ?? 0) - (a.pagerank_score ?? 0))[0]?.label}
-          </p>
-        )}
+      <div className="mt-3 flex flex-wrap gap-6">
+        <p className="data-label">{graph.nodes.length} nodes shown</p>
+        <p className="data-label">{graph.edges.length} edges shown</p>
+        <p className="data-label">
+          Pre-limit: {graph.meta.total_nodes_before_limit} nodes /{" "}
+          {graph.meta.total_edges_before_limit} edges
+        </p>
+        {topAuthor && <p className="data-label">Top author: {topAuthor.label}</p>}
       </div>
+
+      {graph.meta.truncated && graph.meta.truncation_note && (
+        <p className="byline mt-2">{graph.meta.truncation_note}</p>
+      )}
     </div>
   );
 }

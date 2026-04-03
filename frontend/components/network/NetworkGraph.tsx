@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { NetworkNode, NetworkEdge } from "@/types";
+import { NetworkNode, NetworkEdge, NetworkGraphType } from "@/types";
 import EmptyState from "@/components/ui/EmptyState";
 
 const COMMUNITY_COLORS = [
@@ -14,11 +14,12 @@ const COMMUNITY_COLORS = [
 interface NetworkGraphProps {
   nodes: NetworkNode[];
   edges: NetworkEdge[];
+  graphType: NetworkGraphType;
   onNodeClick?: (nodeId: string) => void;
   isLoading?: boolean;
 }
 
-export default function NetworkGraph({ nodes, edges, onNodeClick }: NetworkGraphProps) {
+export default function NetworkGraph({ nodes, edges, graphType, onNodeClick }: NetworkGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma | null>(null);
 
@@ -44,13 +45,22 @@ export default function NetworkGraph({ nodes, edges, onNodeClick }: NetworkGraph
       });
     });
 
-    edges.forEach((edge) => {
+    const directed = graphType === "crosspost";
+
+    edges.forEach((edge, index) => {
       try {
         if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {
-          graph.addEdge(edge.source, edge.target, {
+          const edgeKey = `${edge.source}->${edge.target}-${index}`;
+          const attrs = {
             size: Math.max(0.5, Math.min(4, edge.weight ?? 1)),
             color: "#D4CFC6",
-          });
+            type: directed ? "arrow" : "line",
+          };
+          if (directed) {
+            graph.addDirectedEdgeWithKey(edgeKey, edge.source, edge.target, attrs);
+          } else {
+            graph.addUndirectedEdgeWithKey(edgeKey, edge.source, edge.target, attrs);
+          }
         }
       } catch {}
     });
@@ -69,7 +79,7 @@ export default function NetworkGraph({ nodes, edges, onNodeClick }: NetworkGraph
     });
 
     sigmaRef.current = renderer;
-  }, [nodes, edges, onNodeClick]);
+  }, [nodes, edges, graphType, onNodeClick]);
 
   useEffect(() => {
     buildGraph();
@@ -83,7 +93,7 @@ export default function NetworkGraph({ nodes, edges, onNodeClick }: NetworkGraph
     return (
       <EmptyState
         title="No network data"
-        description="Adjust the filters or try a different subreddit to populate the graph."
+        description="Adjust the filters or try a different keyword to populate the graph."
       />
     );
   }
