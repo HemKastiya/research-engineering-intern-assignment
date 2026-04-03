@@ -60,14 +60,38 @@ class ClusterResult(BaseModel):
 class NetworkNode(BaseModel):
     id: str
     label: str
-    pagerank: float
-    community: int
-    post_count: int
+    pagerank_score: float
+    community_id: int
+    post_count: int = 0
+    top_subreddits: List[str] = Field(default_factory=list)
+    top_domains: List[str] = Field(default_factory=list)
+    recent_post_titles: List[str] = Field(default_factory=list)
 
 class NetworkEdge(BaseModel):
     source: str
     target: str
     weight: float
+    edge_type: str
+
+class NetworkGraphMeta(BaseModel):
+    graph_type: str
+    query: Optional[str] = None
+    top_n: int
+    max_nodes: int
+    total_nodes_before_limit: int
+    total_edges_before_limit: int
+    returned_nodes: int
+    returned_edges: int
+    truncated: bool = False
+    truncation_note: Optional[str] = None
+    corpus_hash: str
+    computed_at: str
+    backbone_computed_at: str
+
+class GraphResult(BaseModel):
+    nodes: List[NetworkNode] = Field(default_factory=list)
+    edges: List[NetworkEdge] = Field(default_factory=list)
+    meta: NetworkGraphMeta
 
 class ChatMessage(BaseModel):
     role: str

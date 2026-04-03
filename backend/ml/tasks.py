@@ -95,6 +95,11 @@ def _embed_all_sync() -> None:
             host=settings.CHROMA_HOST,
             port=str(settings.CHROMA_PORT),
         )
+        # Full rebuild path: reset collection to avoid stale mixed-schema vectors.
+        try:
+            chroma_client.delete_collection(settings.CHROMA_COLLECTION)
+        except Exception:
+            pass
         collection = chroma_client.get_or_create_collection(
             name=settings.CHROMA_COLLECTION,
             metadata={"hnsw:space": "cosine"},
