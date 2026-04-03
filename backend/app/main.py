@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from core.chroma import ensure_collection
 from core.mongo import client as mongo_client
 from app.routers import ingest, timeseries, search, cluster, network, chat
-from ml.tasks import embed_all
+from ml.tasks import schedule_embed_all
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
         c = len(collection.get()['ids'])
         
     if c == 0:
-         embed_all.delay()
+         schedule_embed_all()
     yield
     # Teardown logic
     mongo_client.close()

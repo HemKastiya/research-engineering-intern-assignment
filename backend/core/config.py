@@ -7,9 +7,11 @@ class Settings(BaseSettings):
     CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 8000
     CHROMA_COLLECTION: str = "reddit_posts"
-    
-    REDIS_URL: str = "redis://localhost:6379/0"
-    
+
+    # Backward-compat: keep reading legacy Redis env var if present,
+    # even though Redis/Celery are no longer used by the backend.
+    REDIS_URL: str | None = None
+
     GEMINI_API_KEY: str
     
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
