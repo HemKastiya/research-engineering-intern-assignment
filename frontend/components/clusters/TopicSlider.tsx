@@ -7,7 +7,7 @@ interface TopicSliderProps {
 export default function TopicSlider({ value, onChange, isLoading }: TopicSliderProps) {
   return (
     <div className="flex items-center gap-4 p-4 bg-wash border border-rule rounded">
-      <label className="kicker whitespace-nowrap">Number of Topics</label>
+      <label className="kicker whitespace-nowrap">Target topics</label>
       <input
         type="range"
         min={2}

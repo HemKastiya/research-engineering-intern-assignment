@@ -139,10 +139,11 @@ export interface EmbeddingsResult {
   umap_2d: [number, number][];
   cluster_labels: number[];
   post_ids: string[];
+  point_labels?: string[];
 }
 
-export async function getEmbeddings(n_topics = 10): Promise<EmbeddingsResult> {
-  return fetchJson<EmbeddingsResult>(`/api/clusters/embeddings?n_topics=${n_topics}`, {
+export async function getEmbeddings(n_clusters = 10): Promise<EmbeddingsResult> {
+  return fetchJson<EmbeddingsResult>(`/api/clusters/embeddings?n_clusters=${n_clusters}`, {
     timeoutMs: 120_000,
   });
 }

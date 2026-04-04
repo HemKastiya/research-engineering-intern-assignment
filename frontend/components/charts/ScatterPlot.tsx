@@ -23,7 +23,7 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
 
   useEffect(() => {
     if (!data || !svgRef.current) return;
-    const { umap_2d, cluster_labels, post_ids } = data;
+    const { umap_2d, cluster_labels, post_ids, point_labels } = data;
     if (!umap_2d?.length) return;
 
     const svg = d3.select(svgRef.current);
@@ -66,23 +66,30 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
       .on("zoom", (event) => g.attr("transform", event.transform));
     svg.call(zoom);
 
+    const points = umap_2d.map((coords, index) => ({ coords, index }));
+
     // Points
     g.selectAll("circle")
-      .data(umap_2d)
+      .data(points)
       .enter()
       .append("circle")
-      .attr("cx", (d) => xScale(d[0]))
-      .attr("cy", (d) => yScale(d[1]))
+      .attr("cx", (d) => xScale(d.coords[0]))
+      .attr("cy", (d) => yScale(d.coords[1]))
       .attr("r", 4)
-      .attr("fill", (_, i) => CLUSTER_COLORS[cluster_labels[i] % CLUSTER_COLORS.length])
+      .attr("fill", (d) => {
+        const label = cluster_labels[d.index] ?? 0;
+        const paletteIdx = ((label % CLUSTER_COLORS.length) + CLUSTER_COLORS.length) % CLUSTER_COLORS.length;
+        return CLUSTER_COLORS[paletteIdx];
+      })
       .attr("fill-opacity", 0.72)
       .attr("stroke", "white")
       .attr("stroke-width", 0.8)
       .style("cursor", "pointer")
       .on("mouseenter", function (event, d) {
-        const idx = umap_2d.indexOf(d);
+        const idx = d.index;
         const postId = post_ids?.[idx];
-        const title = titles?.[postId] ?? postId ?? "Post";
+        const pointLabel = point_labels?.[idx];
+        const title = pointLabel ?? titles?.[postId] ?? postId ?? "Post";
         d3.select(this).attr("r", 7).attr("fill-opacity", 1);
         setTooltip({ x: event.offsetX + 12, y: event.offsetY - 8, text: title });
       })

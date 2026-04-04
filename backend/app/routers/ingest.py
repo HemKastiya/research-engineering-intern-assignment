@@ -29,7 +29,14 @@ async def get_ingest_status(db=Depends(get_db)):
     elif task_status == "Failed":
         status = "Failed"
     else:
-        status = "Idle" if mongo_count == vector_count else "Processing"
+        # Chunked indexing can create >1 vector per Mongo document (title/body).
+        # Once no task is running, treat non-empty vector store as idle.
+        if mongo_count == 0:
+            status = "Idle"
+        elif vector_count == 0:
+            status = "Processing"
+        else:
+            status = "Idle"
 
     return {
         "mongo_documents": mongo_count,

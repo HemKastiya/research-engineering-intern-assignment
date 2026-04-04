@@ -82,6 +82,18 @@ export interface ClusterTopic {
   name: string;
   count: number;
   representation: string[];
+  top_posts?: ClusterTopPost[];
+}
+
+export interface ClusterTopPost {
+  post_id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  score: number;
+  num_comments: number;
+  created_date: string;
+  permalink: string;
 }
 
 export interface ClusterResult {

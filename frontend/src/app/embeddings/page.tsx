@@ -13,16 +13,16 @@ const ScatterPlot = dynamic(
 );
 
 export default function EmbeddingsPage() {
-  const [nTopics, setNTopics] = useState(10);
+  const [nClusters, setNClusters] = useState(10);
   const [data, setData] = useState<EmbeddingsResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (n: number) => {
+  const fetchData = useCallback(async (clusterCount: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getEmbeddings(n);
+      const result = await getEmbeddings(clusterCount);
       setData(result);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load embeddings");
@@ -32,7 +32,7 @@ export default function EmbeddingsPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(nTopics);
+    fetchData(nClusters);
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -45,13 +45,13 @@ export default function EmbeddingsPage() {
           type="range"
           min={2}
           max={50}
-          value={nTopics}
-          onChange={(e) => setNTopics(Number(e.target.value))}
+          value={nClusters}
+          onChange={(e) => setNClusters(Number(e.target.value))}
           className="w-32 accent-accent"
         />
-        <span className="data-label w-6">{nTopics}</span>
+        <span className="data-label w-6">{nClusters}</span>
         <button
-          onClick={() => fetchData(nTopics)}
+          onClick={() => fetchData(nClusters)}
           className="press-btn press-btn-ghost"
           disabled={isLoading}
         >
@@ -62,7 +62,7 @@ export default function EmbeddingsPage() {
 
       {error && (
         <div className="mb-4">
-          <ErrorBanner message={error} onRetry={() => fetchData(nTopics)} />
+          <ErrorBanner message={error} onRetry={() => fetchData(nClusters)} />
         </div>
       )}
 

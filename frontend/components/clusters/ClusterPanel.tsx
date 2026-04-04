@@ -24,7 +24,7 @@ export default function ClusterPanel({ topics, isLoading, activeCluster, onClust
   if (!topics || topics.length === 0) {
     return (
       <EmptyState
-        title="No clusters found"
+        title="No topics found"
         description="Try adjusting the number of topics with the slider above."
       />
     );

@@ -51,11 +51,29 @@ class SearchResult(BaseModel):
     post: PostDocument
     relevance_score: float
 
+class ClusterPostPreview(BaseModel):
+    post_id: str
+    title: str
+    author: str
+    subreddit: str
+    score: int = 0
+    num_comments: int = 0
+    created_date: str = ""
+    permalink: str = ""
+
+class ClusterTopic(BaseModel):
+    topic_id: int
+    name: str
+    count: int
+    representation: List[str] = Field(default_factory=list)
+    top_posts: List[ClusterPostPreview] = Field(default_factory=list)
+
 class ClusterResult(BaseModel):
-    cluster_labels: List[int]
-    top_terms: Dict[str, List[str]]
-    post_counts: Dict[str, int]
-    sample_posts: Dict[str, List[PostDocument]]
+    topics: List[ClusterTopic] = Field(default_factory=list)
+    cluster_labels: List[int] = Field(default_factory=list)
+    top_terms: Dict[str, List[str]] = Field(default_factory=dict)
+    post_counts: Dict[str, int] = Field(default_factory=dict)
+    sample_posts: Dict[str, List[PostDocument]] = Field(default_factory=dict)
 
 class NetworkNode(BaseModel):
     id: str
