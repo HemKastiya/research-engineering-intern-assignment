@@ -507,8 +507,10 @@ async def get_timeseries_topics():
 async def get_timeseries_summary(
     query: Optional[str] = None,
     subreddit: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     db=Depends(get_db),
 ):
-    data = await get_timeseries(query, subreddit, None, None, db)
+    data = await get_timeseries(query, subreddit, from_date, to_date, db)
     summary = summarize_trend(data, query or subreddit or "all topics")
     return {"summary": summary}

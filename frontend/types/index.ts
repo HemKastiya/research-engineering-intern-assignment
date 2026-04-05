@@ -1,10 +1,14 @@
 export interface Post {
-  id: string;
-  title: string;
+  id?: string;
+  post_id?: string;
+  title?: string;
+  title_clean?: string;
   selftext_clean?: string;
   subreddit: string;
   author: string;
-  created_utc: string;
+  created_utc: string | number;
+  created_datetime?: string;
+  created_date?: string;
   score: number;
 }
 

@@ -20,18 +20,23 @@ export default function SourcePanel({ sources, isLoading }: SourcePanelProps) {
         ) : sources.length === 0 ? (
           <p className="byline mt-8 text-center">No sources retrieved yet</p>
         ) : (
-          sources.map((result, i) => (
-            <div key={i} className="press-card press-card-brief">
-              <span className="kicker mb-1 block">r/{result.post.subreddit}</span>
-              <p className="body-text mb-1 font-medium leading-snug text-ink">{truncate(result.post.title, 80)}</p>
-              <p className="dateline">
-                {result.post.author} | {formatDate(result.post.created_utc)}
-              </p>
-              {result.post.selftext_clean && (
-                <p className="article-copy mt-2 text-xs text-ink-soft">{truncate(result.post.selftext_clean, 120)}</p>
-              )}
-            </div>
-          ))
+          sources.map((result, i) => {
+            const title = result.post.title ?? result.post.title_clean ?? "(untitled)";
+            const createdValue = result.post.created_datetime ?? result.post.created_date ?? result.post.created_utc;
+
+            return (
+              <div key={i} className="press-card press-card-brief">
+                <span className="kicker mb-1 block">r/{result.post.subreddit}</span>
+                <p className="body-text mb-1 font-medium leading-snug text-ink">{truncate(title, 80)}</p>
+                <p className="dateline">
+                  {result.post.author} | {formatDate(createdValue)}
+                </p>
+                {result.post.selftext_clean && (
+                  <p className="article-copy mt-2 text-xs text-ink-soft">{truncate(result.post.selftext_clean, 120)}</p>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

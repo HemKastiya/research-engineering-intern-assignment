@@ -102,13 +102,10 @@ export async function getTimeSeriesAnalytics(
 }
 
 export async function getTimeSeriesSummary(
-  query?: string,
-  subreddit?: string
+  params: TimeSeriesParams = {}
 ): Promise<{ summary: string }> {
   const qs = new URLSearchParams(
-    Object.fromEntries(
-      Object.entries({ query, subreddit }).filter(([, v]) => v)
-    ) as Record<string, string>
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v))
   ).toString();
   return fetchJson<{ summary: string }>(`/api/timeseries/summary${qs ? "?" + qs : ""}`);
 }

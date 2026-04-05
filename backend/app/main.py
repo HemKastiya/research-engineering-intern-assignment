@@ -4,10 +4,15 @@ from contextlib import asynccontextmanager
 import asyncio
 
 from core.chroma import ensure_collection
+from core.embedding_store import count_chroma_vectors
 from core.mongo import client as mongo_client
 from app.routers import ingest, timeseries, search, cluster, network, chat
 from ml.embedder import warmup_embedder
-from ml.tasks import schedule_embed_all
+from ml.tasks import (
+    restore_chroma_from_mongo,
+    schedule_embed_all,
+    seed_mongo_from_chroma_if_empty,
+)
 from ml.network_builder import DEFAULT_BACKBONE_TOP_N, warm_network_backbone_cache
 
 @asynccontextmanager
@@ -20,15 +25,32 @@ async def lifespan(app: FastAPI):
 
     # Setup Chroma and Embeddings dynamically on startup over empty setups
     collection = ensure_collection()
-    # Simple count check
-    if hasattr(collection, 'count'):
-        c = collection.count()
-    else:
-        # chroma < v0.4
-        c = len(collection.get()['ids'])
+    c = count_chroma_vectors(collection)
         
     if c == 0:
-         schedule_embed_all()
+         try:
+             restored = await asyncio.to_thread(restore_chroma_from_mongo)
+             if restored > 0:
+                 c = restored
+                 print(f"[INFO] Restored {restored} vectors from MongoDB backup into Chroma.")
+             else:
+                 schedule_embed_all()
+         except Exception as exc:
+             print(f"[WARN] Failed to restore Chroma from MongoDB backup: {exc}")
+             schedule_embed_all()
+    else:
+        async def _bootstrap_mongo_backup() -> None:
+            try:
+                copied = await asyncio.to_thread(seed_mongo_from_chroma_if_empty)
+                if copied > 0:
+                    print(f"[INFO] Seeded MongoDB embedding backup from Chroma ({copied} vectors).")
+            except Exception as exc:
+                print(f"[WARN] Failed to seed MongoDB embedding backup from Chroma: {exc}")
+
+        asyncio.create_task(
+            _bootstrap_mongo_backup(),
+            name="bootstrap_mongo_embedding_backup",
+        )
 
     # Precompute default network backbone once, then serve from memory.
     try:

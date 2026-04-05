@@ -9,6 +9,14 @@ import chromadb
 import pymongo
 
 from core.config import settings
+from core.embedding_store import (
+    clear_mongo_embeddings,
+    count_mongo_embeddings,
+    ensure_embeddings_indexes,
+    restore_chroma_from_mongo_embeddings,
+    seed_mongo_embeddings_from_chroma,
+    upsert_mongo_embeddings,
+)
 from ml.clusterer import clear_cluster_cache, run_clustering
 from ml.embedder import embed
 
@@ -17,7 +25,7 @@ _embedding_task: Optional[asyncio.Task[None]] = None
 _last_embedding_error: Optional[str] = None
 
 
-def _process_batch(collection, docs: list[dict[str, Any]]) -> None:
+def _process_batch(chroma_collection, mongo_db, docs: list[dict[str, Any]]) -> None:
     title_texts: list[str] = []
     title_docs: list[dict[str, Any]] = []
     body_texts: list[str] = []
@@ -79,18 +87,31 @@ def _process_batch(collection, docs: list[dict[str, Any]]) -> None:
             )
 
     if ids:
-        collection.upsert(
+        chroma_collection.upsert(
             ids=ids,
             embeddings=embeddings,
             metadatas=metadatas,
             documents=documents,
         )
+        try:
+            upsert_mongo_embeddings(
+                mongo_db,
+                ids=ids,
+                embeddings=embeddings,
+                metadatas=metadatas,
+                documents=documents,
+            )
+        except Exception as exc:
+            # Mongo is backup/source for restore; do not fail serving rebuild if this step fails.
+            print(f"[WARN] Failed to upsert embedding backup into MongoDB: {exc}")
 
 
 def _embed_all_sync() -> None:
     client = pymongo.MongoClient(settings.MONGO_URI)
     db = client[settings.MONGO_DB]
     try:
+        ensure_embeddings_indexes(db)
+
         chroma_client = chromadb.HttpClient(
             host=settings.CHROMA_HOST,
             port=str(settings.CHROMA_PORT),
@@ -104,6 +125,7 @@ def _embed_all_sync() -> None:
             name=settings.CHROMA_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
+        clear_mongo_embeddings(db)
 
         cursor = db.posts.find()
         batch_size = 64
@@ -112,11 +134,11 @@ def _embed_all_sync() -> None:
         for doc in cursor:
             docs.append(doc)
             if len(docs) >= batch_size:
-                _process_batch(collection, docs)
+                _process_batch(collection, db, docs)
                 docs = []
 
         if docs:
-            _process_batch(collection, docs)
+            _process_batch(collection, db, docs)
 
         # Embedding refresh implies data may have changed; invalidate cluster cache.
         clear_cluster_cache()
@@ -181,3 +203,57 @@ def rebuild_clusters(n_topics: int) -> dict[str, Any]:
 
 async def rebuild_clusters_async(n_topics: int) -> dict[str, Any]:
     return await asyncio.to_thread(run_clustering, n_topics)
+
+
+def restore_chroma_from_mongo() -> int:
+    """
+    Rehydrates Chroma vectors from Mongo embedding backup.
+    Returns number of vectors restored.
+    """
+    client = pymongo.MongoClient(settings.MONGO_URI)
+    db = client[settings.MONGO_DB]
+    try:
+        ensure_embeddings_indexes(db)
+        if count_mongo_embeddings(db) == 0:
+            return 0
+
+        chroma_client = chromadb.HttpClient(
+            host=settings.CHROMA_HOST,
+            port=str(settings.CHROMA_PORT),
+        )
+        collection = chroma_client.get_or_create_collection(
+            name=settings.CHROMA_COLLECTION,
+            metadata={"hnsw:space": "cosine"},
+        )
+        return restore_chroma_from_mongo_embeddings(db, collection)
+    finally:
+        client.close()
+
+
+def seed_mongo_from_chroma_if_empty() -> int:
+    """
+    One-time bootstrap path: if Mongo embedding backup is empty but Chroma has vectors,
+    copy current Chroma vectors into Mongo backup storage.
+    """
+    client = pymongo.MongoClient(settings.MONGO_URI)
+    db = client[settings.MONGO_DB]
+    try:
+        ensure_embeddings_indexes(db)
+        if count_mongo_embeddings(db) > 0:
+            return 0
+
+        chroma_client = chromadb.HttpClient(
+            host=settings.CHROMA_HOST,
+            port=str(settings.CHROMA_PORT),
+        )
+        collection = chroma_client.get_or_create_collection(
+            name=settings.CHROMA_COLLECTION,
+            metadata={"hnsw:space": "cosine"},
+        )
+        return seed_mongo_embeddings_from_chroma(
+            db,
+            collection,
+            only_if_empty=True,
+        )
+    finally:
+        client.close()

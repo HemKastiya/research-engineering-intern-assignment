@@ -5,9 +5,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(iso: string): string {
-  if (!iso) return '';
-  const date = new Date(iso);
+export function formatDate(value: string | number | null | undefined): string {
+  if (value == null || value === '') return '';
+
+  let date: Date;
+  if (typeof value === 'number') {
+    const ms = value > 1_000_000_000_000 ? value : value * 1000;
+    date = new Date(ms);
+  } else {
+    const raw = value.trim();
+    if (!raw) return '';
+
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      const numeric = Number(raw);
+      const ms = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+      date = new Date(ms);
+    } else {
+      date = new Date(raw);
+    }
+  }
+
+  if (Number.isNaN(date.getTime())) return String(value);
+
   const formatter = new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'short',

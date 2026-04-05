@@ -8,6 +8,9 @@ interface PostCardProps {
 
 export default function PostCard({ result, compact = false }: PostCardProps) {
   const { post, relevance_score } = result;
+  const postId = post.id ?? post.post_id ?? "";
+  const title = post.title ?? post.title_clean ?? "(untitled)";
+  const createdValue = post.created_datetime ?? post.created_date ?? post.created_utc;
 
   return (
     <article className="press-card press-card-story group">
@@ -19,11 +22,11 @@ export default function PostCard({ result, compact = false }: PostCardProps) {
       </div>
 
       <h3 className="section-head mb-2 text-base leading-snug transition-colors group-hover:text-accent">
-        {compact ? truncate(post.title, 100) : post.title}
+        {compact ? truncate(title, 100) : title}
       </h3>
 
       <p className="dateline mb-3">
-        By u/{post.author} | {formatDate(post.created_utc)}
+        By u/{post.author} | {formatDate(createdValue)}
       </p>
 
       {post.selftext_clean && !compact && (
@@ -32,9 +35,9 @@ export default function PostCard({ result, compact = false }: PostCardProps) {
 
       <div className="flex items-center justify-between border-t border-rule pt-2">
         <span className="data-label">score: {formatScore(post.score)}</span>
-        {post.id && (
+        {postId && (
           <a
-            href={`https://reddit.com/r/${post.subreddit}/comments/${post.id}`}
+            href={`https://reddit.com/r/${post.subreddit}/comments/${postId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="data-label transition-colors hover:text-accent"

@@ -1,4 +1,4 @@
-"""One-time script. MongoDB -> Embed -> upserts into Chroma."""
+"""One-time script. MongoDB -> Embed -> upserts into Chroma + Mongo backup."""
 import os
 import sys
 
@@ -8,48 +8,59 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import chromadb
 import pymongo
 from core.config import settings
+from core.embedding_store import (
+    clear_mongo_embeddings,
+    ensure_embeddings_indexes,
+    upsert_mongo_embeddings,
+)
 from ml.embedder import embed
 import time
 
 def build_embeddings():
     client = pymongo.MongoClient(settings.MONGO_URI)
-    db = client[settings.MONGO_DB]
-    total_docs = db.posts.count_documents({})
-    
-    if total_docs == 0:
-         print("MongoDB is empty. Seed Mongo first.")
-         sys.exit(1)
-         
-    chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=str(settings.CHROMA_PORT))
     try:
-         chroma_client.delete_collection(settings.CHROMA_COLLECTION)
-         print("Deleted existing Chroma collection for clean rebuild.")
-    except Exception:
-         pass
-    collection = chroma_client.get_or_create_collection(
-         name=settings.CHROMA_COLLECTION,
-         metadata={"hnsw:space": "cosine"}
-    )
-    
-    batch_size = 64
-    docs = []
-    
-    cursor = db.posts.find()
-    start = time.time()
-    
-    for doc in cursor:
-          docs.append(doc)
-          if len(docs) >= batch_size:
-               _process_batch(collection, docs)
-               docs = []
-               
-    if docs:
-          _process_batch(collection, docs)
-          
-    end = time.time()
-    print(f"Upserted embeddings into Chroma in {end - start:.2f} seconds.")
+         db = client[settings.MONGO_DB]
+         total_docs = db.posts.count_documents({})
+         
+         if total_docs == 0:
+              print("MongoDB is empty. Seed Mongo first.")
+              sys.exit(1)
+              
+         ensure_embeddings_indexes(db)
 
-def _process_batch(collection, docs):
+         chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=str(settings.CHROMA_PORT))
+         try:
+              chroma_client.delete_collection(settings.CHROMA_COLLECTION)
+              print("Deleted existing Chroma collection for clean rebuild.")
+         except Exception:
+              pass
+         collection = chroma_client.get_or_create_collection(
+              name=settings.CHROMA_COLLECTION,
+              metadata={"hnsw:space": "cosine"}
+         )
+         clear_mongo_embeddings(db)
+         
+         batch_size = 64
+         docs = []
+         
+         cursor = db.posts.find()
+         start = time.time()
+         
+         for doc in cursor:
+               docs.append(doc)
+               if len(docs) >= batch_size:
+                    _process_batch(collection, db, docs)
+                    docs = []
+                    
+         if docs:
+               _process_batch(collection, db, docs)
+               
+         end = time.time()
+         print(f"Upserted embeddings into Chroma + Mongo backup in {end - start:.2f} seconds.")
+    finally:
+         client.close()
+
+def _process_batch(collection, db, docs):
      title_texts = []
      title_docs = []
      body_texts = []
@@ -113,6 +124,16 @@ def _process_batch(collection, docs):
                metadatas=metadatas,
                documents=texts
           )
+          try:
+               upsert_mongo_embeddings(
+                    db,
+                    ids=ids,
+                    embeddings=vectors,
+                    metadatas=metadatas,
+                    documents=texts,
+               )
+          except Exception as exc:
+               print(f"[WARN] Failed to upsert embedding backup into MongoDB: {exc}")
 
 if __name__ == "__main__":
      build_embeddings()

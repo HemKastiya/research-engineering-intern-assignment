@@ -43,37 +43,38 @@ export default function SearchPage() {
   };
 
   return (
-    <div>
+    <div className="news-section">
       <SectionHeading kicker="Semantic Search" title="Find Posts by Meaning" />
 
-      {/* Search form */}
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="flex gap-2 max-w-2xl">
+      <form onSubmit={handleSubmit} className="press-card press-card-brief mb-8">
+        <div className="mb-2 flex max-w-3xl gap-2">
           <input
             id="search-input"
             className="press-input flex-1"
-            placeholder="Search across all posts semantically…"
+            placeholder="Search across all posts semantically..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
           <button type="submit" disabled={!query.trim() || isLoading} className="press-btn">
-            {isLoading ? "Searching…" : "Search"}
+            {isLoading ? "Searching..." : "Search"}
           </button>
         </div>
-        <p className="byline mt-1">Powered by MiniLM sentence embeddings · Chroma vector search</p>
+        <p className="byline">Powered by MiniLM sentence embeddings and Chroma vector search</p>
       </form>
 
-      {/* Example queries */}
       {!hasSearched && (
-        <div className="mb-6">
-          <p className="kicker mb-2">Example queries</p>
+        <div className="mb-6 border-y border-rule py-4">
+          <p className="kicker mb-2">Suggested Openers</p>
           <div className="flex flex-wrap gap-2">
             {EXAMPLE_QUERIES.map((q) => (
               <button
                 key={q}
-                onClick={() => { setQuery(q); handleSearch(q); }}
-                className="pill-badge cursor-pointer hover:border-muted hover:text-ink transition-colors"
+                onClick={() => {
+                  setQuery(q);
+                  handleSearch(q);
+                }}
+                className="pill-badge cursor-pointer transition-colors hover:border-muted hover:text-ink"
               >
                 {q}
               </button>
@@ -88,25 +89,29 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Results */}
       {isLoading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => <LoadingSkeleton key={i} variant="card" />)}
+          {[1, 2, 3].map((i) => (
+            <LoadingSkeleton key={i} variant="card" />
+          ))}
         </div>
       ) : hasSearched && results.length === 0 ? (
         <EmptyState
           title="No results found"
-          description="Try a different phrasing or a broader topic."
+          description="Try a broader topic or rephrase your question with less specific wording."
           suggestions={EXAMPLE_QUERIES}
-          onSuggestionClick={(s) => { setQuery(s); handleSearch(s); }}
+          onSuggestionClick={(s) => {
+            setQuery(s);
+            handleSearch(s);
+          }}
         />
       ) : (
         <div className="space-y-4">
           {results.length > 0 && (
-            <p className="data-label mb-3">{results.length} results for "{query}"</p>
+            <p className="data-label mb-3">{`${results.length} results for "${query}"`}</p>
           )}
           {results.map((r, i) => (
-            <PostCard key={r.post.id ?? i} result={r} />
+            <PostCard key={r.post.id ?? r.post.post_id ?? i} result={r} />
           ))}
         </div>
       )}

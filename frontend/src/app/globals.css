@@ -245,7 +245,6 @@
 
   .press-card:hover {
     border-color: var(--color-muted);
-    transform: translateY(-1px);
   }
 
   .press-card-story {

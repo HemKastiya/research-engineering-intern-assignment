@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     MONGO_URI: str = "mongodb://localhost:27017"
     MONGO_DB: str = "reddit_investigator"
+    MONGO_EMBEDDINGS_COLLECTION: str = "post_embeddings"
     
     CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 8000

@@ -10,6 +10,7 @@ import google.generativeai as genai
 import pymongo
 
 from core.config import settings
+from core.embedding_store import count_mongo_embeddings, ensure_embeddings_indexes
 
 
 def verify_setup() -> None:
@@ -21,6 +22,10 @@ def verify_setup() -> None:
         db = client[settings.MONGO_DB]
         count = db.posts.count_documents({})
         print(f"[OK] MongoDB connection (records: {count})")
+
+        ensure_embeddings_indexes(db)
+        embedding_count = count_mongo_embeddings(db)
+        print(f"[OK] MongoDB embedding backup collection (vectors: {embedding_count})")
 
         indexes = db.posts.index_information()
         has_text_index = any("textIndexVersion" in idx for idx in indexes.values())

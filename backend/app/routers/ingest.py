@@ -12,6 +12,7 @@ router = APIRouter()
 @router.get("/status")
 async def get_ingest_status(db=Depends(get_db)):
     mongo_count = await db.posts.count_documents({})
+    mongo_embedding_count = await db[settings.MONGO_EMBEDDINGS_COLLECTION].count_documents({})
 
     chroma = get_chroma()
     try:
@@ -40,6 +41,7 @@ async def get_ingest_status(db=Depends(get_db)):
 
     return {
         "mongo_documents": mongo_count,
+        "mongo_embedding_vectors": mongo_embedding_count,
         "chroma_vectors": vector_count,
         "embedding_status": status,
     }
