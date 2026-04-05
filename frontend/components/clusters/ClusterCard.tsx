@@ -21,7 +21,7 @@ export default function ClusterCard({ topic, maxCount, isActive, onClick }: Clus
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <span className="kicker">Topic {topic.topic_id}</span>
+        <span className="kicker">Topic {topic.topic_id + 1}</span>
         <span className="data-label">{topic.count} posts</span>
       </div>
 

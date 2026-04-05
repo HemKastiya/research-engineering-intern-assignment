@@ -25,7 +25,7 @@ MAX_DOC_CHARS_FOR_SCORING = 8000
 MAX_DOC_CHARS_FOR_CONTEXT = 600
 MAX_CONTEXT_CHARS = 16000
 
-TOKEN_RE = re.compile(r"[a-z0-9]{2,}", re.IGNORECASE)
+TOKEN_RE = re.compile(r"\b\w{2,}\b", re.UNICODE)
 
 STOPWORDS = {"a", "an", "and","are", "as", "at", "be", "by", "for", "from", "has", "have", "how",
     "in", "is", "it", "its", "of", "on", "or", "that", "the", "this", "to", "was",
@@ -51,8 +51,19 @@ def _normalize_text(value: str) -> str:
 
 
 def _tokenize(value: str) -> list[str]:
-    tokens = [token.lower() for token in TOKEN_RE.findall(_safe_text(value))]
-    return [token for token in tokens if token not in STOPWORDS]
+    tokens = [token.casefold() for token in TOKEN_RE.findall(_safe_text(value))]
+    normalized_tokens: list[str] = []
+
+    for token in tokens:
+        if not any(ch.isalnum() for ch in token):
+            continue
+        # Keep stopword filtering scoped to ASCII tokens so multilingual
+        # terms are preserved for lexical/BM25 scoring.
+        if token.isascii() and token in STOPWORDS:
+            continue
+        normalized_tokens.append(token)
+
+    return normalized_tokens
 
 
 def _extract_history_context(messages: Sequence[dict[str, str]] | None) -> str:

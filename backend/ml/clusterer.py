@@ -1,7 +1,9 @@
 import asyncio
 import copy
 import hashlib
+import json
 import threading
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import numpy as np
@@ -40,6 +42,14 @@ _EMBEDDING_VIEW_CACHE: dict[tuple[str, int], dict[str, Any]] = {}
 _EMBEDDING_VIEW_CACHE_LOCK = threading.Lock()
 _EMBEDDING_VIEW_INFLIGHT: dict[int, asyncio.Task[dict[str, Any]]] = {}
 _EMBEDDING_VIEW_INFLIGHT_LOCK = threading.Lock()
+
+_DEFAULT_PERSISTED_CLUSTER_PARAM = 10
+_PERSISTED_CLUSTER_CACHE_COLLECTION = "precomputed_clusters"
+_PERSISTED_CACHE_VERSION = 1
+_PERSISTED_KIND_TOPICS = "topics"
+_PERSISTED_KIND_EMBEDDINGS = "embeddings"
+_PERSISTED_INDEX_LOCK = threading.Lock()
+_PERSISTED_INDEXES_READY = False
 
 _TOPIC_STOP_WORDS = set(ENGLISH_STOP_WORDS) | {
     "amp",
@@ -82,6 +92,120 @@ class SynchronousMongo:
 
         self.client = pymongo.MongoClient(settings.MONGO_URI)
         self.db = self.client[settings.MONGO_DB]
+
+
+def _is_default_cluster_request(value: int) -> bool:
+    return int(value) == _DEFAULT_PERSISTED_CLUSTER_PARAM
+
+
+def _persisted_cache_filter(kind: str, corpus_key: str, parameter: int) -> dict[str, Any]:
+    if kind == _PERSISTED_KIND_TOPICS:
+        parameter_field = "n_topics"
+    else:
+        parameter_field = "n_clusters"
+
+    return {
+        "kind": kind,
+        "cache_version": _PERSISTED_CACHE_VERSION,
+        "embedding_model": settings.EMBEDDING_MODEL,
+        "corpus_key": corpus_key,
+        parameter_field: int(parameter),
+    }
+
+
+def _ensure_persisted_cache_indexes(collection) -> None:
+    global _PERSISTED_INDEXES_READY
+    with _PERSISTED_INDEX_LOCK:
+        if _PERSISTED_INDEXES_READY:
+            return
+        try:
+            collection.create_index(
+                [
+                    ("kind", 1),
+                    ("cache_version", 1),
+                    ("embedding_model", 1),
+                    ("corpus_key", 1),
+                    ("n_topics", 1),
+                ],
+                name="precomputed_topics_lookup",
+                sparse=True,
+            )
+        except Exception:
+            pass
+        try:
+            collection.create_index(
+                [
+                    ("kind", 1),
+                    ("cache_version", 1),
+                    ("embedding_model", 1),
+                    ("corpus_key", 1),
+                    ("n_clusters", 1),
+                ],
+                name="precomputed_embeddings_lookup",
+                sparse=True,
+            )
+        except Exception:
+            pass
+        _PERSISTED_INDEXES_READY = True
+
+
+def _load_persisted_cluster_cache(
+    kind: str, corpus_key: str, parameter: int
+) -> Optional[dict[str, Any]]:
+    if not _is_default_cluster_request(parameter):
+        return None
+
+    sync_mongo = SynchronousMongo()
+    try:
+        collection = sync_mongo.db[_PERSISTED_CLUSTER_CACHE_COLLECTION]
+        row = collection.find_one(
+            _persisted_cache_filter(kind, corpus_key, parameter),
+            {"_id": 0, "payload_json": 1},
+        )
+        if not row:
+            return None
+
+        payload_json = str(row.get("payload_json") or "").strip()
+        if not payload_json:
+            return None
+
+        payload = json.loads(payload_json)
+        if isinstance(payload, dict):
+            return payload
+        return None
+    except Exception:
+        return None
+    finally:
+        sync_mongo.client.close()
+
+
+def _save_persisted_cluster_cache(
+    kind: str, corpus_key: str, parameter: int, payload: dict[str, Any]
+) -> None:
+    if not _is_default_cluster_request(parameter):
+        return
+
+    sync_mongo = SynchronousMongo()
+    try:
+        collection = sync_mongo.db[_PERSISTED_CLUSTER_CACHE_COLLECTION]
+        _ensure_persisted_cache_indexes(collection)
+
+        cache_filter = _persisted_cache_filter(kind, corpus_key, parameter)
+        collection.update_one(
+            cache_filter,
+            {
+                "$set": {
+                    "payload_json": json.dumps(payload, ensure_ascii=False, default=str),
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+            upsert=True,
+        )
+    except Exception:
+        # Best-effort persistence: serving should continue even if cache write fails.
+        pass
+    finally:
+        sync_mongo.client.close()
 
 
 def _load_docs(projection: Optional[dict[str, int]] = None) -> list[dict[str, Any]]:
@@ -675,9 +799,13 @@ def _build_cluster_result(
         else:
             topics_payload.append(payload)
 
+    all_topics = list(topics_payload)
+    if outlier_topic is not None:
+        all_topics.append(outlier_topic)
+
     return {
         "topics": sorted(
-            topics_payload if topics_payload or outlier_topic is None else [outlier_topic],
+            all_topics,
             key=lambda topic: topic["count"],
             reverse=True,
         ),
@@ -735,6 +863,11 @@ def run_clustering(n_topics: int) -> dict[str, Any]:
     if cached is not None:
         return cached
 
+    persisted = _load_persisted_cluster_cache(_PERSISTED_KIND_TOPICS, corpus_key, n_topics)
+    if persisted is not None:
+        _set_cached(corpus_key, n_topics, persisted)
+        return copy.deepcopy(persisted)
+
     embeddings = _get_or_build_corpus_embeddings(corpus_key, post_ids, texts)
     coords_2d = _get_or_build_umap_2d(corpus_key, embeddings)
     base_model = _build_base_topic_model(corpus_key, texts, embeddings, len(texts))
@@ -775,6 +908,7 @@ def run_clustering(n_topics: int) -> dict[str, Any]:
     _set_cached(corpus_key, n_topics, result)
     if target_topics != n_topics:
         _set_cached(corpus_key, target_topics, result)
+    _save_persisted_cluster_cache(_PERSISTED_KIND_TOPICS, corpus_key, n_topics, result)
     return result
 
 
@@ -799,6 +933,12 @@ def run_embedding_projection(n_clusters: int) -> dict[str, Any]:
     if cached is not None:
         return copy.deepcopy(cached)
 
+    persisted = _load_persisted_cluster_cache(_PERSISTED_KIND_EMBEDDINGS, corpus_key, n_clusters)
+    if persisted is not None:
+        with _EMBEDDING_VIEW_CACHE_LOCK:
+            _EMBEDDING_VIEW_CACHE[cache_key] = copy.deepcopy(persisted)
+        return copy.deepcopy(persisted)
+
     label_map = _point_label_map(corpus_key)
     point_labels = [label_map.get(post_id, "u/unknown in r/unknown") for post_id in post_ids]
 
@@ -812,6 +952,7 @@ def run_embedding_projection(n_clusters: int) -> dict[str, Any]:
     }
     with _EMBEDDING_VIEW_CACHE_LOCK:
         _EMBEDDING_VIEW_CACHE[cache_key] = copy.deepcopy(result)
+    _save_persisted_cluster_cache(_PERSISTED_KIND_EMBEDDINGS, corpus_key, n_clusters, result)
     return result
 
 

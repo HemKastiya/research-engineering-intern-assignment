@@ -12,6 +12,51 @@ import pymongo
 from core.config import settings
 from core.embedding_store import count_mongo_embeddings, ensure_embeddings_indexes
 
+POSTS_TEXT_INDEX_NAME = "posts_text_search"
+
+
+def _has_multilingual_posts_text_index(posts_collection) -> bool:
+    indexes = posts_collection.index_information()
+    text_indexes = [
+        (name, spec)
+        for name, spec in indexes.items()
+        if "textIndexVersion" in spec
+    ]
+    desired = indexes.get(POSTS_TEXT_INDEX_NAME)
+    if not desired or "textIndexVersion" not in desired:
+        return False
+
+    default_language = str(desired.get("default_language", "english")).lower()
+    if default_language != "none":
+        return False
+
+    # Mongo supports only one text index per collection.
+    return len(text_indexes) == 1
+
+
+def _ensure_multilingual_posts_text_index(posts_collection) -> None:
+    if _has_multilingual_posts_text_index(posts_collection):
+        print("[OK] Mongo text index is configured for multilingual lexical matching.")
+        return
+
+    indexes = posts_collection.index_information()
+    text_index_names = [
+        name
+        for name, spec in indexes.items()
+        if "textIndexVersion" in spec
+    ]
+    for index_name in text_index_names:
+        posts_collection.drop_index(index_name)
+        print(f"[INFO] Dropped outdated Mongo text index: {index_name}")
+
+    posts_collection.create_index(
+        [("title_clean", pymongo.TEXT), ("selftext_clean", pymongo.TEXT), ("combined_text", pymongo.TEXT)],
+        weights={"title_clean": 3, "selftext_clean": 1, "combined_text": 1},
+        default_language="none",
+        name=POSTS_TEXT_INDEX_NAME,
+    )
+    print("[OK] Created multilingual Mongo text index: posts_text_search")
+
 
 def verify_setup() -> None:
     errors = 0
@@ -27,16 +72,7 @@ def verify_setup() -> None:
         embedding_count = count_mongo_embeddings(db)
         print(f"[OK] MongoDB embedding backup collection (vectors: {embedding_count})")
 
-        indexes = db.posts.index_information()
-        has_text_index = any("textIndexVersion" in idx for idx in indexes.values())
-        if not has_text_index:
-            print("[WARN] No Mongo text index found on posts; creating weighted text index now...")
-            db.posts.create_index(
-                [("title_clean", pymongo.TEXT), ("selftext_clean", pymongo.TEXT), ("combined_text", pymongo.TEXT)],
-                weights={"title_clean": 3, "selftext_clean": 1, "combined_text": 1},
-                name="posts_text_search",
-            )
-            print("[OK] Created Mongo text index: posts_text_search")
+        _ensure_multilingual_posts_text_index(db.posts)
     except Exception as exc:
         print(f"[ERR] MongoDB: {exc}")
         errors += 1

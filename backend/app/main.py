@@ -5,7 +5,7 @@ import asyncio
 
 from core.chroma import ensure_collection
 from core.embedding_store import count_chroma_vectors
-from core.mongo import client as mongo_client
+from core.mongo import client as mongo_client, ensure_posts_indexes
 from app.routers import ingest, timeseries, search, cluster, network, chat
 from ml.embedder import warmup_embedder
 from ml.tasks import (
@@ -22,6 +22,11 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(warmup_embedder)
     except Exception as exc:
         print(f"[WARN] Failed to warm up embedding model: {exc}")
+
+    try:
+        await ensure_posts_indexes()
+    except Exception as exc:
+        print(f"[WARN] Failed to ensure Mongo posts indexes: {exc}")
 
     # Setup Chroma and Embeddings dynamically on startup over empty setups
     collection = ensure_collection()

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str
     
-    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     EMBEDDING_DIM: int = 384
 
     class Config:

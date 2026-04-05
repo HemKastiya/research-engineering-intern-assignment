@@ -1,5 +1,4 @@
 import type {
-  Post,
   SearchResult,
   TimeSeriesPoint,
   TimeSeriesAnalytics,
@@ -19,12 +18,122 @@ class ApiError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_CACHE_TTL_MS = 5 * 60_000;
+const SESSION_CACHE_PREFIX = "rei-api-cache:v1:";
+
+interface FetchJsonOptions extends RequestInit {
+  timeoutMs?: number;
+  cacheTtlMs?: number;
+  cacheKey?: string;
+}
+
+interface CacheEntry {
+  expiresAt: number;
+  payload: unknown;
+}
+
+const memoryCache = new Map<string, CacheEntry>();
+
+function isBrowserEnvironment(): boolean {
+  return typeof window !== "undefined";
+}
+
+function canUseSessionStorage(): boolean {
+  return isBrowserEnvironment() && typeof window.sessionStorage !== "undefined";
+}
+
+function clonePayload<T>(payload: T): T {
+  if (typeof structuredClone === "function") {
+    return structuredClone(payload);
+  }
+  return JSON.parse(JSON.stringify(payload)) as T;
+}
+
+function buildCacheKey(url: string, options: RequestInit, explicitKey?: string): string | null {
+  const method = (options.method ?? "GET").toUpperCase();
+  if (explicitKey) {
+    return `${method}:${API_BASE}${url}:${explicitKey}`;
+  }
+
+  if (options.body == null) {
+    return `${method}:${API_BASE}${url}`;
+  }
+  if (typeof options.body === "string") {
+    return `${method}:${API_BASE}${url}:${options.body}`;
+  }
+  return null;
+}
+
+function readCachedValue<T>(key: string): T | null {
+  const now = Date.now();
+  const fromMemory = memoryCache.get(key);
+  if (fromMemory) {
+    if (fromMemory.expiresAt > now) {
+      return clonePayload(fromMemory.payload as T);
+    }
+    memoryCache.delete(key);
+  }
+
+  if (!canUseSessionStorage()) return null;
+
+  const storageKey = `${SESSION_CACHE_PREFIX}${key}`;
+  const rawValue = window.sessionStorage.getItem(storageKey);
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<CacheEntry>;
+    if (typeof parsed.expiresAt !== "number") {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    if (parsed.expiresAt <= now) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+
+    const entry: CacheEntry = {
+      expiresAt: parsed.expiresAt,
+      payload: parsed.payload,
+    };
+    memoryCache.set(key, entry);
+    return clonePayload(entry.payload as T);
+  } catch {
+    window.sessionStorage.removeItem(storageKey);
+    return null;
+  }
+}
+
+function writeCachedValue(key: string, payload: unknown, ttlMs: number): void {
+  const entry: CacheEntry = {
+    expiresAt: Date.now() + ttlMs,
+    payload,
+  };
+  memoryCache.set(key, entry);
+  if (!canUseSessionStorage()) return;
+
+  try {
+    window.sessionStorage.setItem(`${SESSION_CACHE_PREFIX}${key}`, JSON.stringify(entry));
+  } catch {
+    // Ignore quota/security errors and keep in-memory cache only.
+  }
+}
 
 async function fetchJson<T>(
   url: string,
-  options?: RequestInit & { timeoutMs?: number }
+  options?: FetchJsonOptions
 ): Promise<T> {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options ?? {};
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, cacheTtlMs, cacheKey, ...fetchOptions } = options ?? {};
+  const method = (fetchOptions.method ?? "GET").toUpperCase();
+  const effectiveCacheTtlMs = cacheTtlMs ?? (method === "GET" ? DEFAULT_CACHE_TTL_MS : 0);
+  const shouldUseCache = isBrowserEnvironment() && effectiveCacheTtlMs > 0;
+  const resolvedCacheKey = shouldUseCache
+    ? buildCacheKey(url, { ...fetchOptions, method }, cacheKey)
+    : null;
+
+  if (shouldUseCache && resolvedCacheKey) {
+    const cachedValue = readCachedValue<T>(resolvedCacheKey);
+    if (cachedValue !== null) return cachedValue;
+  }
 
   // Merge caller's signal with timeout signal
   const timeoutCtrl = new AbortController();
@@ -48,7 +157,13 @@ async function fetchJson<T>(
       } catch { }
       throw new ApiError(res.status, detail);
     }
-    return res.json() as Promise<T>;
+
+    const data = (await res.json()) as T;
+    if (shouldUseCache && resolvedCacheKey) {
+      writeCachedValue(resolvedCacheKey, data, effectiveCacheTtlMs);
+      return clonePayload(data);
+    }
+    return data;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new ApiError(408, `Request timed out after ${timeoutMs / 1000}s`);
@@ -71,7 +186,8 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
 
 // ── Ingest ────────────────────────────────────────────────────────────────────
 export async function getIngestStatus(): Promise<IngestStatus> {
-  return fetchJson<IngestStatus>("/api/ingest/status");
+  // Keep status polling live; avoid serving stale ingest progress.
+  return fetchJson<IngestStatus>("/api/ingest/status", { cacheTtlMs: 0 });
 }
 
 // ── Time Series ───────────────────────────────────────────────────────────────
@@ -121,6 +237,7 @@ export async function searchPosts(params: SearchParams): Promise<SearchResult[]>
   return fetchJson<SearchResult[]>("/api/search/", {
     method: "POST",
     body: JSON.stringify({ top_k: 10, ...params }),
+    cacheTtlMs: 5 * 60_000,
   });
 }
 

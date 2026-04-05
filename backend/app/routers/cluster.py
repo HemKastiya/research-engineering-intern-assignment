@@ -36,7 +36,7 @@ def _build_topics_from_legacy_result(result: dict[str, Any]) -> list[dict[str, A
         else:
             topics.append(topic_payload)
 
-    if not topics and outlier_topic is not None:
+    if outlier_topic is not None:
         topics.append(outlier_topic)
     topics.sort(key=lambda topic: topic["count"], reverse=True)
     return topics

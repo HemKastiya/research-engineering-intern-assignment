@@ -16,6 +16,7 @@ env/
 data/
 *.json
 *.jsonl
+chroma_data/
 
 # Logs and databases
 *.log
