@@ -44,7 +44,7 @@ export default function GraphControls({
   onResetRemoved,
 }: GraphControlsProps) {
   return (
-    <div className="mb-4 rounded border border-rule bg-wash p-4">
+    <div className="press-card press-card-brief mb-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {GRAPH_TYPE_OPTIONS.map((option) => (
           <button

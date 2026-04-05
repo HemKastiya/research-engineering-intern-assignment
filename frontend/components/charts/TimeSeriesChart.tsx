@@ -24,7 +24,7 @@ interface TimeSeriesChartProps {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="press-card text-xs py-2 px-3 shadow-md">
+    <div className="press-card press-card-brief px-3 py-2 text-xs shadow-sm">
       <p className="byline mb-1">{formatDate(label)}</p>
       <p className="font-semibold text-ink">{payload[0]?.value} posts</p>
       {payload[1] && (
@@ -106,7 +106,7 @@ export default function TimeSeriesChart({ data, isLoading }: TimeSeriesChartProp
           dataKey="date"
           height={24}
           stroke="#D4CFC6"
-          fill="#F7F3EC"
+          fill="#EFE8DC"
           travellerWidth={6}
           tickFormatter={(v) =>
             new Date(v).toLocaleDateString("en-GB", { month: "short", day: "numeric" })

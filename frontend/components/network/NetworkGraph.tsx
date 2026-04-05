@@ -7,8 +7,8 @@ import { NetworkNode, NetworkEdge, NetworkGraphType } from "@/types";
 import EmptyState from "@/components/ui/EmptyState";
 
 const COMMUNITY_COLORS = [
-  "#C41E1E", "#2563EB", "#16A34A", "#D97706",
-  "#7C3AED", "#0891B2", "#DB2777", "#65A30D",
+  "#C41E1E", "#30363F", "#7B6A58", "#8B5C2C",
+  "#5E4A7E", "#2E6171", "#7F1D1D", "#4A5568",
 ];
 
 interface NetworkGraphProps {
@@ -181,7 +181,7 @@ export default function NetworkGraph({ nodes, edges, graphType, onNodeClick }: N
     <div className="relative w-full h-full">
       <div
         ref={containerRef}
-        className="w-full h-full rounded border border-rule bg-wash"
+        className="w-full h-full border border-rule bg-wash"
         style={{ minHeight: "480px" }}
       />
 
@@ -197,7 +197,7 @@ export default function NetworkGraph({ nodes, edges, graphType, onNodeClick }: N
         </button>
       </div>
 
-      <p className="byline absolute bottom-3 left-3 rounded bg-paper/80 px-2 py-1">
+      <p className="byline absolute bottom-3 left-3 border border-rule bg-paper/85 px-2 py-1">
         Drag nodes to reposition. Scroll to zoom.
       </p>
     </div>

@@ -6,7 +6,7 @@ interface TopicSliderProps {
 
 export default function TopicSlider({ value, onChange, isLoading }: TopicSliderProps) {
   return (
-    <div className="flex items-center gap-4 p-4 bg-wash border border-rule rounded">
+    <div className="flex items-center gap-4 border border-rule bg-wash p-4">
       <label className="kicker whitespace-nowrap">Target topics</label>
       <input
         type="range"
@@ -17,12 +17,8 @@ export default function TopicSlider({ value, onChange, isLoading }: TopicSliderP
         className="flex-1 accent-accent"
         disabled={isLoading}
       />
-      <span className="font-playfair text-2xl font-black text-ink w-10 text-center leading-none">
-        {value}
-      </span>
-      {isLoading && (
-        <span className="data-label animate-pulse">Clustering…</span>
-      )}
+      <span className="w-10 text-center font-playfair text-2xl font-black leading-none text-ink">{value}</span>
+      {isLoading && <span className="data-label animate-pulse">Clustering...</span>}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import NavTabs from "@/components/layout/NavTabs";
 import IngestStatusBanner from "@/components/layout/IngestStatusBanner";
 
 export const metadata: Metadata = {
-  title: "The Daily Query — Reddit Research Intelligence",
+  title: "The Daily Query - Reddit Research Intelligence",
   description:
     "Semantic search, network analysis, topic clustering, and AI-powered intelligence across Reddit datasets.",
 };
@@ -17,11 +17,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-paper">
-        <IngestStatusBanner />
-        <Masthead />
-        <NavTabs />
-        <main className="max-w-[1400px] mx-auto px-6 py-8">{children}</main>
+      <body className="min-h-screen bg-paper px-2 md:px-3">
+        <div className="edition-shell min-h-screen">
+          <IngestStatusBanner />
+          <Masthead />
+          <NavTabs />
+          <main className="edition-main">{children}</main>
+        </div>
       </body>
     </html>
   );

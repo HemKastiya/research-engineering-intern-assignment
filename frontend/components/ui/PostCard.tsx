@@ -1,6 +1,5 @@
 import { SearchResult } from "@/types";
 import { formatDate, truncate, formatScore } from "@/lib/utils";
-import Link from "next/link";
 
 interface PostCardProps {
   result: SearchResult;
@@ -11,45 +10,36 @@ export default function PostCard({ result, compact = false }: PostCardProps) {
   const { post, relevance_score } = result;
 
   return (
-    <article className="press-card group">
-      {/* Kicker + score */}
-      <div className="flex items-center justify-between mb-2">
+    <article className="press-card press-card-story group">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <span className="kicker">r/{post.subreddit}</span>
         {relevance_score != null && (
-          <span className="data-label">
-            {(relevance_score * 100).toFixed(0)}% match
-          </span>
+          <span className="data-label">{(relevance_score * 100).toFixed(0)}% match</span>
         )}
       </div>
 
-      {/* Title */}
-      <h3 className="section-head text-base leading-snug mb-2 group-hover:text-accent transition-colors">
+      <h3 className="section-head mb-2 text-base leading-snug transition-colors group-hover:text-accent">
         {compact ? truncate(post.title, 100) : post.title}
       </h3>
 
-      {/* Byline */}
-      <p className="byline mb-3">
-        u/{post.author} · {formatDate(post.created_utc)}
+      <p className="dateline mb-3">
+        By u/{post.author} | {formatDate(post.created_utc)}
       </p>
 
-      {/* Body snippet */}
       {post.selftext_clean && !compact && (
-        <p className="body-text text-muted mb-3">
-          {truncate(post.selftext_clean, 280)}
-        </p>
+        <p className="article-copy mb-3 text-sm text-ink-soft">{truncate(post.selftext_clean, 280)}</p>
       )}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-rule">
-        <span className="data-label">↑ {formatScore(post.score)}</span>
+      <div className="flex items-center justify-between border-t border-rule pt-2">
+        <span className="data-label">score: {formatScore(post.score)}</span>
         {post.id && (
           <a
             href={`https://reddit.com/r/${post.subreddit}/comments/${post.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="data-label hover:text-accent transition-colors"
+            className="data-label transition-colors hover:text-accent"
           >
-            View post →
+            Read full post -&gt;
           </a>
         )}
       </div>

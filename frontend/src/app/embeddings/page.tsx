@@ -7,10 +7,10 @@ import SectionHeading from "@/components/ui/SectionHeading";
 import ErrorBanner from "@/components/ui/ErrorBanner";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 
-const ScatterPlot = dynamic(
-  () => import("@/components/charts/ScatterPlot"),
-  { ssr: false, loading: () => <LoadingSkeleton variant="chart" /> }
-);
+const ScatterPlot = dynamic(() => import("@/components/charts/ScatterPlot"), {
+  ssr: false,
+  loading: () => <LoadingSkeleton variant="chart" />,
+});
 
 export default function EmbeddingsPage() {
   const [nClusters, setNClusters] = useState(10);
@@ -33,13 +33,13 @@ export default function EmbeddingsPage() {
 
   useEffect(() => {
     fetchData(nClusters);
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div>
+    <div className="news-section">
       <SectionHeading kicker="Embedding Space" title="UMAP 2D Projection" />
 
-      <div className="flex items-center gap-4 mb-6 p-4 bg-wash border border-rule rounded flex-wrap">
+      <div className="press-card press-card-brief mb-6 flex flex-wrap items-center gap-4 p-4">
         <label className="kicker whitespace-nowrap">Cluster count</label>
         <input
           type="range"
@@ -50,14 +50,10 @@ export default function EmbeddingsPage() {
           className="w-32 accent-accent"
         />
         <span className="data-label w-6">{nClusters}</span>
-        <button
-          onClick={() => fetchData(nClusters)}
-          className="press-btn press-btn-ghost"
-          disabled={isLoading}
-        >
-          {isLoading ? "Loading…" : "Apply"}
+        <button onClick={() => fetchData(nClusters)} className="press-btn press-btn-ghost" disabled={isLoading}>
+          {isLoading ? "Loading..." : "Apply"}
         </button>
-        <p className="byline ml-auto">Scroll to zoom · drag to pan</p>
+        <p className="byline ml-auto">Scroll to zoom | drag to pan</p>
       </div>
 
       {error && (
@@ -68,10 +64,10 @@ export default function EmbeddingsPage() {
 
       <div className="press-card p-0 overflow-hidden">
         {isLoading ? (
-          <div className="h-[520px] flex items-center justify-center bg-wash">
+          <div className="flex h-[520px] items-center justify-center bg-wash">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-ink border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-              <p className="byline">Projecting embeddings…</p>
+              <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+              <p className="byline">Projecting embeddings...</p>
             </div>
           </div>
         ) : (
@@ -82,9 +78,7 @@ export default function EmbeddingsPage() {
       {data && (
         <div className="mt-3 flex gap-6">
           <p className="data-label">{data.umap_2d?.length ?? 0} data points</p>
-          <p className="data-label">
-            {[...new Set(data.cluster_labels ?? [])].length} clusters rendered
-          </p>
+          <p className="data-label">{[...new Set(data.cluster_labels ?? [])].length} clusters rendered</p>
         </div>
       )}
     </div>

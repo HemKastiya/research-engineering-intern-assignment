@@ -17,30 +17,26 @@ export default function NavTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky top-0 z-30 bg-paper border-b border-rule overflow-x-auto">
-      <div className="flex items-center px-6 min-w-max">
+    <nav className="sticky top-0 z-30 overflow-x-auto border-y border-rule bg-paper/95 backdrop-blur-[1px]">
+      <div className="flex min-w-max items-center gap-1 px-6">
+        <span className="dateline mr-1 border-r border-rule pr-2">Sections</span>
         {TABS.map((tab, i) => {
-          const isActive = tab.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(tab.href);
+          const isActive = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
 
           return (
             <div key={tab.href} className="flex items-center">
-              {i > 0 && (
-                <span className="text-rule mx-1 select-none">·</span>
-              )}
               <Link
                 href={tab.href}
                 className={[
-                  "px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors whitespace-nowrap",
-                  "border-b-2",
+                  "whitespace-nowrap border-b-2 px-3 py-3 text-[0.68rem] font-semibold uppercase tracking-[0.17em] transition-colors",
                   isActive
                     ? "border-accent text-accent"
-                    : "border-transparent text-muted hover:text-ink hover:border-rule",
+                    : "border-transparent text-muted hover:border-rule hover:text-ink",
                 ].join(" ")}
               >
                 {tab.label}
               </Link>
+              {i < TABS.length - 1 && <span className="mx-0.5 text-rule">|</span>}
             </div>
           );
         })}

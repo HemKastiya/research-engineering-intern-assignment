@@ -16,7 +16,6 @@ export default function ClustersPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeCluster, setActiveCluster] = useState<number | null>(null);
 
-  // Debounce slider
   useEffect(() => {
     const id = setTimeout(() => setDebouncedN(nTopics), 600);
     return () => clearTimeout(id);
@@ -42,10 +41,10 @@ export default function ClustersPage() {
   const activeTopicData = topics.find((t) => t.topic_id === activeCluster);
 
   return (
-    <div>
+    <div className="news-section">
       <SectionHeading kicker="Topic Modelling" title="BERTopic Clusters" />
 
-      <div className="mb-6">
+      <div className="press-card press-card-brief mb-6">
         <TopicSlider value={nTopics} onChange={setNTopics} isLoading={isLoading} />
       </div>
 
@@ -55,8 +54,7 @@ export default function ClustersPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Cluster list */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <p className="kicker mb-3">{topics.length} topics</p>
           <ClusterPanel
@@ -67,10 +65,9 @@ export default function ClustersPage() {
           />
         </div>
 
-        {/* Active cluster detail */}
         <div className="lg:col-span-2">
           {activeTopicData ? (
-            <div className="press-card h-full">
+            <div className="press-card press-card-brief h-full">
               <p className="kicker mb-2">Topic {activeTopicData.topic_id} - Detail</p>
               <h2 className="section-head mb-4">{activeTopicData.name || `Topic ${activeTopicData.topic_id}`}</h2>
 
@@ -78,7 +75,9 @@ export default function ClustersPage() {
                 <p className="data-label mb-2">Top Terms</p>
                 <div className="flex flex-wrap gap-2">
                   {(activeTopicData.representation ?? []).map((term) => (
-                    <span key={term} className="pill-badge pill-badge-accent">{term}</span>
+                    <span key={term} className="pill-badge pill-badge-accent">
+                      {term}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -89,24 +88,22 @@ export default function ClustersPage() {
                   <div className="space-y-2">
                     {(activeTopicData.top_posts ?? []).slice(0, 10).map((post) => {
                       const href = post.permalink
-                        ? (post.permalink.startsWith("http") ? post.permalink : `https://reddit.com${post.permalink}`)
+                        ? post.permalink.startsWith("http")
+                          ? post.permalink
+                          : `https://reddit.com${post.permalink}`
                         : "";
+
                       return (
-                        <div key={post.post_id} className="bg-wash border border-rule rounded p-3">
+                        <div key={post.post_id} className="border border-rule bg-wash p-3">
                           {href ? (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-semibold text-accent hover:underline"
-                            >
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">
                               {post.title}
                             </a>
                           ) : (
                             <p className="font-semibold text-ink">{post.title}</p>
                           )}
                           <p className="byline mt-1">
-                            u/{post.author} in r/{post.subreddit} • Score {post.score} • Comments {post.num_comments}
+                            u/{post.author} in r/{post.subreddit} | Score {post.score} | Comments {post.num_comments}
                           </p>
                         </div>
                       );
@@ -127,15 +124,16 @@ export default function ClustersPage() {
                   <p className="font-playfair text-2xl font-black">
                     {topics.length > 0
                       ? ((activeTopicData.count / topics.reduce((s, t) => s + t.count, 0)) * 100).toFixed(1)
-                      : 0}%
+                      : 0}
+                    %
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="press-card h-full flex items-center justify-center">
+            <div className="press-card press-card-brief flex h-full items-center justify-center">
               <div className="text-center">
-                <div className="w-12 border-t border-rule mx-auto mb-4" />
+                <div className="mx-auto mb-4 w-12 border-t border-rule" />
                 <p className="kicker mb-2">Select a Topic</p>
                 <p className="byline">Click any topic on the left to see details</p>
               </div>
@@ -146,4 +144,3 @@ export default function ClustersPage() {
     </div>
   );
 }
-

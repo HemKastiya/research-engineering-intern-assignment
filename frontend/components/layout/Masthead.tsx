@@ -14,34 +14,32 @@ export default function Masthead({ totalRecords, dateRange }: MastheadProps) {
   });
 
   return (
-    <header className="border-b-2 border-ink bg-paper px-6 py-4">
-      {/* Top rule with edition info */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="data-label">Vol. I — No. 1</span>
-        <div className="flex items-center gap-4">
-          {dateRange && (
-            <span className="data-label">Data: {dateRange}</span>
-          )}
-          {totalRecords != null && (
-            <span className="data-label">{totalRecords.toLocaleString()} records indexed</span>
-          )}
-          <span className="data-label">{today}</span>
-        </div>
+    <header className="border-b-2 border-ink bg-paper px-6 pt-4 pb-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="dateline">Vol. I | No. 1</span>
+        <span className="dateline">{today}</span>
       </div>
 
-      {/* Hairline rule */}
-      <div className="border-t border-rule mb-3" />
+      <div className="mb-3 border-t border-rule" />
 
-      {/* Masthead name */}
-      <div className="text-center">
+      <div className="px-2 text-center">
+        <p className="kicker mb-1 text-ink">Data Intelligence Desk</p>
         <h1 className="masthead-text tracking-tight">{mastheadTokens.name}</h1>
-        <p className="byline mt-1 tracking-widest uppercase text-[0.65rem]">
+        <p className="byline mt-1 text-[0.64rem] uppercase tracking-[0.24em]">
           {mastheadTokens.tagline}
         </p>
       </div>
 
-      {/* Bottom rule */}
-      <div className="border-t-2 border-ink mt-3" />
+      <div className="mt-3 border-t border-ink" />
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <span className="dateline">Published daily from live corpus signals</span>
+        <div className="flex flex-wrap items-center gap-4">
+          {dateRange && <span className="data-label">Data window: {dateRange}</span>}
+          {totalRecords != null && (
+            <span className="data-label">{totalRecords.toLocaleString()} records indexed</span>
+          )}
+        </div>
+      </div>
     </header>
   );
 }

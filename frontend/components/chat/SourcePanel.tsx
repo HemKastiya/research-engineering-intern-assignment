@@ -9,30 +9,26 @@ interface SourcePanelProps {
 
 export default function SourcePanel({ sources, isLoading }: SourcePanelProps) {
   return (
-    <div className="h-full flex flex-col border-l border-rule">
-      <div className="p-4 border-b border-rule">
+    <div className="flex h-full flex-col border-l border-rule">
+      <div className="border-b border-rule p-4">
         <p className="kicker mb-0.5">Retrieved Sources</p>
-        <p className="byline">RAG context for last response</p>
+        <p className="byline">Context used for the latest answer</p>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <LoadingSkeleton key={i} variant="card" lines={2} />
-          ))
+          Array.from({ length: 3 }).map((_, i) => <LoadingSkeleton key={i} variant="card" lines={2} />)
         ) : sources.length === 0 ? (
-          <p className="byline text-center mt-8">No sources retrieved yet</p>
+          <p className="byline mt-8 text-center">No sources retrieved yet</p>
         ) : (
           sources.map((result, i) => (
-            <div key={i} className="press-card">
-              <span className="kicker block mb-1">r/{result.post.subreddit}</span>
-              <p className="body-text font-medium text-ink mb-1 leading-snug">
-                {truncate(result.post.title, 80)}
+            <div key={i} className="press-card press-card-brief">
+              <span className="kicker mb-1 block">r/{result.post.subreddit}</span>
+              <p className="body-text mb-1 font-medium leading-snug text-ink">{truncate(result.post.title, 80)}</p>
+              <p className="dateline">
+                {result.post.author} | {formatDate(result.post.created_utc)}
               </p>
-              <p className="byline">{result.post.author} · {formatDate(result.post.created_utc)}</p>
               {result.post.selftext_clean && (
-                <p className="body-text text-muted mt-2 text-xs">
-                  {truncate(result.post.selftext_clean, 120)}
-                </p>
+                <p className="article-copy mt-2 text-xs text-ink-soft">{truncate(result.post.selftext_clean, 120)}</p>
               )}
             </div>
           ))

@@ -15,8 +15,8 @@ export default function ClusterCard({ topic, maxCount, isActive, onClick }: Clus
     <button
       onClick={onClick}
       className={[
-        "w-full text-left press-card transition-all",
-        isActive ? "border-accent shadow-sm" : "",
+        "w-full text-left press-card press-card-brief transition-all",
+        isActive ? "border-accent" : "",
       ].join(" ")}
     >
       {/* Header */}
@@ -35,7 +35,7 @@ export default function ClusterCard({ topic, maxCount, isActive, onClick }: Clus
       </div>
 
       {/* Size bar */}
-      <div className="w-full h-1 bg-rule rounded-full overflow-hidden">
+      <div className="w-full h-1 bg-rule overflow-hidden">
         <div
           className="h-full bg-accent transition-all duration-300"
           style={{ width: `${barWidth}%` }}

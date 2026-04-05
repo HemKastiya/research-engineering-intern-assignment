@@ -22,7 +22,6 @@ export default function ChatPage() {
     (query: string) => {
       if (!query.trim() || isStreaming) return;
 
-      // Abort any previous stream
       abortRef.current?.abort();
 
       const userMsg: ChatMessage = { role: "user", content: query };
@@ -65,18 +64,14 @@ export default function ChatPage() {
   );
 
   return (
-    <div>
+    <div className="news-section">
       <SectionHeading kicker="RAG Intelligence" title="Ask the Dataset" />
       <p className="byline mb-6">
-        Semantic retrieval + Gemini 1.5 Flash · Multilingual · Sources shown →
+        Semantic retrieval + Gemini 1.5 Flash | Multilingual support | Sources included
       </p>
 
-      <div
-        className="border border-rule rounded overflow-hidden flex"
-        style={{ height: "calc(100vh - 300px)", minHeight: "500px" }}
-      >
-        {/* Chat — 60% */}
-        <div className="flex-[3] flex flex-col min-h-0">
+      <div className="flex overflow-hidden border-2 border-ink bg-paper" style={{ height: "calc(100vh - 300px)", minHeight: "500px" }}>
+        <div className="flex min-h-0 flex-[3] flex-col border-r border-rule">
           <ChatWindow
             messages={messages}
             isStreaming={isStreaming}
@@ -87,14 +82,11 @@ export default function ChatPage() {
               if (lastUser) handleSubmit(lastUser.content);
             }}
           />
-          {suggestions.length > 0 && (
-            <SuggestedQueries suggestions={suggestions} onSelect={handleSubmit} />
-          )}
+          {suggestions.length > 0 && <SuggestedQueries suggestions={suggestions} onSelect={handleSubmit} />}
           <ChatInput onSubmit={handleSubmit} isStreaming={isStreaming} />
         </div>
 
-        {/* Sources — 40% */}
-        <div className="flex-[2] min-h-0 overflow-hidden">
+        <div className="min-h-0 flex-[2] overflow-hidden bg-wash/40">
           <SourcePanel sources={sources} isLoading={isStreaming && sources.length === 0} />
         </div>
       </div>

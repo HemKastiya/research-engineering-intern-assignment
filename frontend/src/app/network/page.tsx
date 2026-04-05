@@ -198,7 +198,7 @@ export default function NetworkPage() {
   const topAuthor = graph.nodes[0];
 
   return (
-    <div>
+    <div className="news-section">
       <SectionHeading kicker="Graph Analysis" title="Author Interaction Network" />
 
       <GraphControls
@@ -226,12 +226,12 @@ export default function NetworkPage() {
       )}
 
       <div
-        className="flex gap-0 overflow-hidden rounded border border-rule"
+        className="flex gap-0 overflow-hidden border-2 border-ink"
         style={{ height: "560px" }}
       >
         <div className="relative flex-[7]">
           {isLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-wash">
+            <div className="absolute inset-0 flex items-center justify-center bg-wash/90">
               <div className="text-center">
                 <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-ink border-t-transparent" />
                 <p className="byline">Loading graph...</p>
@@ -252,7 +252,7 @@ export default function NetworkPage() {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-6">
+      <div className="mt-3 flex flex-wrap gap-6 border-t border-rule pt-3">
         <p className="data-label">{graph.nodes.length} nodes shown</p>
         <p className="data-label">{graph.edges.length} edges shown</p>
         <p className="data-label">
@@ -268,3 +268,5 @@ export default function NetworkPage() {
     </div>
   );
 }
+
+

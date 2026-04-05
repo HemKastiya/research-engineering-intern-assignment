@@ -7,8 +7,8 @@ import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 import EmptyState from "@/components/ui/EmptyState";
 
 const CLUSTER_COLORS = [
-  "#C41E1E", "#2563EB", "#16A34A", "#D97706",
-  "#7C3AED", "#0891B2", "#DB2777", "#65A30D",
+  "#C41E1E", "#30363F", "#7B6A58", "#8B5C2C",
+  "#5E4A7E", "#2E6171", "#7F1D1D", "#4A5568",
 ];
 
 interface ScatterPlotProps {
@@ -46,29 +46,29 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
       .domain([d3.min(ys)! - 0.5, d3.max(ys)! + 0.5])
       .range([height - margin.bottom, margin.top]);
 
-    // Axes
     svg
       .append("g")
       .attr("transform", `translate(0,${height - margin.bottom})`)
       .call(d3.axisBottom(xScale).ticks(5).tickSize(0))
-      .select(".domain").attr("stroke", "#D4CFC6");
+      .select(".domain")
+      .attr("stroke", "#D4CFC6");
 
     svg
       .append("g")
       .attr("transform", `translate(${margin.left},0)`)
       .call(d3.axisLeft(yScale).ticks(5).tickSize(0))
-      .select(".domain").attr("stroke", "#D4CFC6");
+      .select(".domain")
+      .attr("stroke", "#D4CFC6");
 
-    // Zoom
     const g = svg.append("g");
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.5, 20])
       .on("zoom", (event) => g.attr("transform", event.transform));
     svg.call(zoom);
 
     const points = umap_2d.map((coords, index) => ({ coords, index }));
 
-    // Points
     g.selectAll("circle")
       .data(points)
       .enter()
@@ -81,8 +81,8 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
         const paletteIdx = ((label % CLUSTER_COLORS.length) + CLUSTER_COLORS.length) % CLUSTER_COLORS.length;
         return CLUSTER_COLORS[paletteIdx];
       })
-      .attr("fill-opacity", 0.72)
-      .attr("stroke", "white")
+      .attr("fill-opacity", 0.76)
+      .attr("stroke", "#fff")
       .attr("stroke-width", 0.8)
       .style("cursor", "pointer")
       .on("mouseenter", function (event, d) {
@@ -94,7 +94,7 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
         setTooltip({ x: event.offsetX + 12, y: event.offsetY - 8, text: title });
       })
       .on("mouseleave", function () {
-        d3.select(this).attr("r", 4).attr("fill-opacity", 0.72);
+        d3.select(this).attr("r", 4).attr("fill-opacity", 0.76);
         setTooltip(null);
       });
   }, [data, titles]);
@@ -104,7 +104,7 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
     return (
       <EmptyState
         title="Embeddings not yet built"
-        description="Embeddings are still processing. Check back shortly or trigger ingest from the overview."
+        description="Embeddings are still processing. Check back shortly or trigger ingest from overview."
       />
     );
   }
@@ -112,22 +112,21 @@ export default function ScatterPlot({ data, isLoading, titles }: ScatterPlotProp
   const uniqueLabels = [...new Set(data.cluster_labels)].sort((a, b) => a - b);
 
   return (
-    <div className="relative w-full h-[520px]">
-      <svg ref={svgRef} className="w-full h-full" />
+    <div className="relative h-[520px] w-full">
+      <svg ref={svgRef} className="h-full w-full" />
       {tooltip && (
         <div
-          className="absolute press-card text-xs py-1 px-2 pointer-events-none max-w-[200px] z-10"
+          className="press-card press-card-brief pointer-events-none absolute z-10 max-w-[200px] px-2 py-1 text-xs"
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           {tooltip.text}
         </div>
       )}
-      {/* Legend */}
-      <div className="absolute top-2 right-2 press-card p-2 space-y-1">
+      <div className="press-card press-card-brief absolute right-2 top-2 space-y-1 p-2">
         {uniqueLabels.slice(0, 8).map((label) => (
           <div key={label} className="flex items-center gap-2">
             <span
-              className="inline-block w-2.5 h-2.5 rounded-full"
+              className="inline-block h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: CLUSTER_COLORS[label % CLUSTER_COLORS.length] }}
             />
             <span className="data-label">Cluster {label}</span>

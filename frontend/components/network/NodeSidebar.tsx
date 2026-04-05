@@ -21,7 +21,7 @@ export default function NodeSidebar({ node, onClose }: NodeSidebarProps) {
       <div className="mb-4 flex items-center justify-between">
         <p className="kicker">Author Profile</p>
         <button onClick={onClose} className="text-lg leading-none text-muted hover:text-ink">
-          x
+          X
         </button>
       </div>
       <div className="mb-4 border-t border-rule" />
@@ -30,26 +30,26 @@ export default function NodeSidebar({ node, onClose }: NodeSidebarProps) {
       <p className="byline mb-6">u/{node.id}</p>
 
       <div className="space-y-4">
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-1">PageRank Score</p>
           <p className="font-playfair text-2xl font-black text-ink">
             {node.pagerank_score.toFixed(6)}
           </p>
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-1">Community</p>
           <p className="font-playfair text-2xl font-black text-ink">#{node.community_id}</p>
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-1">Post Count</p>
           <p className="font-playfair text-2xl font-black text-ink">
             {node.post_count.toLocaleString()}
           </p>
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-2">Top Subreddits</p>
           {node.top_subreddits.length === 0 ? (
             <p className="byline">No subreddit metadata available.</p>
@@ -64,7 +64,7 @@ export default function NodeSidebar({ node, onClose }: NodeSidebarProps) {
           )}
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-2">Top Domains</p>
           {node.top_domains.length === 0 ? (
             <p className="byline">No external-domain metadata available.</p>
@@ -79,7 +79,7 @@ export default function NodeSidebar({ node, onClose }: NodeSidebarProps) {
           )}
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-2">Recent Post Titles</p>
           {node.recent_post_titles.length === 0 ? (
             <p className="byline">No title sample available.</p>

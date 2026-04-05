@@ -20,7 +20,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 import { formatDate } from "@/lib/utils";
 
-const COLORS = ["#C41E1E", "#2563EB", "#16A34A", "#D97706", "#0891B2", "#7C3AED", "#DB2777", "#65A30D"];
+const COLORS = ["#C41E1E", "#30363F", "#7B6A58", "#8B5C2C", "#4A5568", "#7F1D1D", "#2E6171", "#5E4A7E"];
 
 export type AnalyticsChartType = "line" | "bar" | "pie";
 
@@ -41,7 +41,7 @@ interface AnalyticsChartProps {
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="press-card text-xs py-2 px-3 shadow-md">
+    <div className="press-card press-card-brief px-3 py-2 text-xs shadow-sm">
       <p className="byline mb-1">{label}</p>
       <p className="font-semibold text-ink">{payload[0]?.value}</p>
     </div>
@@ -83,8 +83,8 @@ export default function AnalyticsChart({
               <Cell key={entry.label} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip />
-          <Legend />
+          <Tooltip content={<ChartTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: "Inter, sans-serif", color: "#6B6860" }} />
         </PieChart>
       </ResponsiveContainer>
     );
@@ -97,9 +97,7 @@ export default function AnalyticsChart({
           <CartesianGrid strokeDasharray="3 3" stroke="#D4CFC6" vertical={false} />
           <XAxis
             dataKey="label"
-            tickFormatter={(value) =>
-              isDateAxis ? formatDate(String(value)) : String(value)
-            }
+            tickFormatter={(value) => (isDateAxis ? formatDate(String(value)) : String(value))}
             tick={{ fontSize: 11, fill: "#6B6860", fontFamily: "JetBrains Mono, monospace" }}
             axisLine={{ stroke: "#D4CFC6" }}
             tickLine={false}
@@ -111,7 +109,7 @@ export default function AnalyticsChart({
             width={44}
           />
           <Tooltip content={<ChartTooltip />} />
-          <Legend />
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: "Inter, sans-serif", color: "#6B6860" }} />
           <Line
             type="monotone"
             dataKey="value"
@@ -132,9 +130,7 @@ export default function AnalyticsChart({
         <CartesianGrid strokeDasharray="3 3" stroke="#D4CFC6" vertical={false} />
         <XAxis
           dataKey="label"
-          tickFormatter={(value) =>
-            isDateAxis ? formatDate(String(value)) : String(value)
-          }
+          tickFormatter={(value) => (isDateAxis ? formatDate(String(value)) : String(value))}
           tick={{ fontSize: 11, fill: "#6B6860", fontFamily: "JetBrains Mono, monospace" }}
           axisLine={{ stroke: "#D4CFC6" }}
           tickLine={false}
@@ -146,10 +142,9 @@ export default function AnalyticsChart({
           width={44}
         />
         <Tooltip content={<ChartTooltip />} />
-        <Legend />
-        <Bar dataKey="value" name={valueLabel} fill="#C41E1E" radius={[4, 4, 0, 0]} />
+        <Legend wrapperStyle={{ fontSize: 11, fontFamily: "Inter, sans-serif", color: "#6B6860" }} />
+        <Bar dataKey="value" name={valueLabel} fill="#C41E1E" radius={[2, 2, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
 }
-

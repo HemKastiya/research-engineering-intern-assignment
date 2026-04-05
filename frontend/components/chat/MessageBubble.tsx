@@ -9,21 +9,17 @@ export default function MessageBubble({ message, isStreaming }: MessageBubblePro
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
+    <div className={`mb-4 flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={[
-          "max-w-[80%] rounded px-4 py-3 text-sm leading-relaxed",
+          "max-w-[80%] border px-4 py-3 text-sm leading-relaxed",
           isUser
-            ? "bg-ink text-paper"
-            : "bg-white border border-rule text-ink",
+            ? "border-ink bg-ink text-paper"
+            : "border-rule bg-white text-ink",
         ].join(" ")}
       >
-        {!isUser && (
-          <p className="kicker mb-2">AI Assistant</p>
-        )}
-        <p className={isStreaming && !isUser ? "blink-cursor" : ""}>
-          {message.content}
-        </p>
+        {!isUser && <p className="kicker mb-2">AI Desk</p>}
+        <p className={isStreaming && !isUser ? "blink-cursor" : ""}>{message.content}</p>
       </div>
     </div>
   );

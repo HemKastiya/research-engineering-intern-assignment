@@ -25,13 +25,13 @@ export default function ChatInput({ onSubmit, isStreaming }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t border-rule p-4 bg-paper">
-      <div className="flex gap-2 items-end">
+    <div className="border-t border-rule bg-paper p-4">
+      <div className="flex items-end gap-2">
         <textarea
           id="chat-input"
-          className="press-input resize-none flex-1"
+          className="press-input flex-1 resize-none"
           rows={2}
-          placeholder="Ask a question about the dataset… (Enter to send, Shift+Enter for newline)"
+          placeholder="Ask a question about the dataset... (Enter to send, Shift+Enter for newline)"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -40,12 +40,12 @@ export default function ChatInput({ onSubmit, isStreaming }: ChatInputProps) {
         <button
           onClick={handleSubmit}
           disabled={!value.trim() || isStreaming}
-          className="press-btn shrink-0 h-[58px]"
+          className="press-btn h-[58px] shrink-0"
         >
-          {isStreaming ? "…" : "Send"}
+          {isStreaming ? "..." : "Send"}
         </button>
       </div>
-      <p className="byline mt-1">Multilingual queries supported · Shift+Enter for newline</p>
+      <p className="byline mt-1">Multilingual queries supported | Shift+Enter for newline</p>
     </div>
   );
 }

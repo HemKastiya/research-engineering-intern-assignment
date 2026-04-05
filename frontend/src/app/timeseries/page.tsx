@@ -178,7 +178,7 @@ export default function TimeSeriesPage() {
   const clusterCount = analytics?.ml_models.daily_clusters.n_clusters ?? 0;
 
   return (
-    <div>
+    <div className="news-section">
       <SectionHeading kicker="Trend Intelligence" title="Interactive Time-Series Analytics" />
 
       <div className="mb-6">
@@ -198,7 +198,7 @@ export default function TimeSeriesPage() {
         </div>
       )}
 
-      <div className="press-card mb-6">
+      <div className="press-card press-card-brief mb-6">
         <div className="flex flex-wrap gap-4 mb-4">
           <div>
             <label className="data-label block mb-1">Dataset</label>
@@ -245,7 +245,7 @@ export default function TimeSeriesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-2">Trend Model</p>
           {isLoading ? (
             <LoadingSkeleton lines={2} />
@@ -253,12 +253,12 @@ export default function TimeSeriesPage() {
             <>
               <p className="body-text">Direction: <span className="font-semibold text-ink">{trend?.direction ?? "flat"}</span></p>
               <p className="byline">Slope: {trend ? trend.slope.toFixed(3) : "0.000"}</p>
-              <p className="byline">R�: {trend ? trend.r2.toFixed(3) : "0.000"}</p>
+              <p className="byline">R2: {trend ? trend.r2.toFixed(3) : "0.000"}</p>
             </>
           )}
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-2">Anomaly Detection</p>
           {isLoading ? (
             <LoadingSkeleton lines={2} />
@@ -270,7 +270,7 @@ export default function TimeSeriesPage() {
           )}
         </div>
 
-        <div className="press-card">
+        <div className="press-card press-card-brief">
           <p className="kicker mb-2">Regime Clustering</p>
           {isLoading ? (
             <LoadingSkeleton lines={2} />
@@ -288,8 +288,8 @@ export default function TimeSeriesPage() {
         {isSummaryLoading ? (
           <LoadingSkeleton lines={4} />
         ) : summary ? (
-          <div className="press-card border-l-4 border-accent">
-            <p className="kicker mb-2">Gemini Analysis</p>
+          <div className="press-card press-card-brief border-l-4 border-accent">
+            <p className="kicker mb-2">Editorial Summary</p>
             <p className="body-text leading-relaxed">{summary}</p>
           </div>
         ) : (
@@ -297,7 +297,7 @@ export default function TimeSeriesPage() {
         )}
       </div>
 
-      <div className="press-card">
+      <div className="press-card press-card-brief">
         <p className="kicker mb-2">Dataset Statistics</p>
         <div className="flex flex-wrap gap-6">
           <div>
@@ -321,3 +321,7 @@ export default function TimeSeriesPage() {
     </div>
   );
 }
+
+
+
+
