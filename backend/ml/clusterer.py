@@ -9,6 +9,8 @@ from bertopic import BERTopic
 from bertopic.vectorizers import ClassTfidfTransformer
 from hdbscan import HDBSCAN
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, CountVectorizer
+from sklearn.manifold import trustworthiness
+from sklearn.neighbors import NearestNeighbors
 from umap import UMAP
 
 from core.config import settings
@@ -28,6 +30,8 @@ _CORPUS_EMBEDDINGS_CACHE: dict[str, np.ndarray] = {}
 _CORPUS_EMBEDDINGS_LOCK = threading.Lock()
 _UMAP_2D_CACHE: dict[str, np.ndarray] = {}
 _UMAP_2D_LOCK = threading.Lock()
+_UMAP_CONFIG_CACHE: dict[str, dict[str, Any]] = {}
+_UMAP_CONFIG_LOCK = threading.Lock()
 
 _POINT_LABELS_CACHE: dict[str, dict[str, str]] = {}
 _POINT_LABELS_LOCK = threading.Lock()
@@ -61,6 +65,15 @@ _TOPIC_STOP_WORDS = set(ENGLISH_STOP_WORDS) | {
     "www",
     "com",
 }
+
+_UMAP_PARAM_CANDIDATES: tuple[tuple[int, float], ...] = (
+    (10, 0.0),
+    (15, 0.0),
+    (30, 0.05),
+    (45, 0.1),
+)
+_UMAP_TUNE_SAMPLE_SIZE = 1500
+_UMAP_QUALITY_K = 15
 
 
 class SynchronousMongo:
@@ -121,6 +134,8 @@ def clear_cluster_cache() -> None:
         _CORPUS_EMBEDDINGS_CACHE.clear()
     with _UMAP_2D_LOCK:
         _UMAP_2D_CACHE.clear()
+    with _UMAP_CONFIG_LOCK:
+        _UMAP_CONFIG_CACHE.clear()
     with _POINT_LABELS_LOCK:
         _POINT_LABELS_CACHE.clear()
     with _EMBEDDING_VIEW_CACHE_LOCK:
@@ -244,20 +259,174 @@ def _get_or_build_corpus_embeddings(
     return matrix
 
 
+def _as_optional_float(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(number):
+        return None
+    return number
+
+
+def _cosine_knn(embeddings: np.ndarray, n_neighbors: int) -> tuple[np.ndarray, np.ndarray]:
+    total = int(embeddings.shape[0])
+    neighbors = max(2, min(int(n_neighbors), total))
+    model = NearestNeighbors(n_neighbors=neighbors, metric="cosine", algorithm="brute")
+    model.fit(embeddings)
+    distances, indices = model.kneighbors(embeddings)
+    return indices, distances
+
+
+def _knn_overlap(high_neighbors: np.ndarray, low_neighbors: np.ndarray) -> float:
+    if high_neighbors.size == 0 or low_neighbors.size == 0:
+        return 0.0
+
+    k = min(int(high_neighbors.shape[1]), int(low_neighbors.shape[1]))
+    if k <= 0:
+        return 0.0
+
+    overlaps: list[float] = []
+    for idx in range(int(high_neighbors.shape[0])):
+        hi = {int(item) for item in high_neighbors[idx][:k]}
+        lo = {int(item) for item in low_neighbors[idx][:k]}
+        overlaps.append(len(hi & lo) / k)
+    if not overlaps:
+        return 0.0
+    return float(np.mean(overlaps))
+
+
+def _fit_umap_with_precomputed_knn(
+    embeddings: np.ndarray,
+    *,
+    n_neighbors: int,
+    n_components: int,
+    min_dist: float,
+) -> np.ndarray:
+    knn_indices, knn_distances = _cosine_knn(embeddings, n_neighbors)
+    effective_neighbors = int(knn_indices.shape[1])
+    model = UMAP(
+        n_neighbors=effective_neighbors,
+        n_components=n_components,
+        min_dist=float(min_dist),
+        metric="cosine",
+        random_state=42,
+        n_jobs=1,
+        precomputed_knn=(knn_indices, knn_distances, None),
+    )
+    return model.fit_transform(embeddings)
+
+
+def _tune_umap_config(corpus_key: str, embeddings: np.ndarray) -> dict[str, Any]:
+    total = int(embeddings.shape[0])
+    default_config = {
+        "n_neighbors": 15,
+        "min_dist": 0.0,
+        "score": None,
+        "trustworthiness": None,
+        "knn_overlap": None,
+        "metric_k": min(_UMAP_QUALITY_K, max(total - 1, 1)),
+        "sample_size": min(_UMAP_TUNE_SAMPLE_SIZE, total),
+        "candidate_count": len(_UMAP_PARAM_CANDIDATES),
+    }
+    if total < 10:
+        return default_config
+
+    sample_size = min(_UMAP_TUNE_SAMPLE_SIZE, total)
+    seed = int(corpus_key[:8], 16) if len(corpus_key) >= 8 else 42
+    if sample_size < total:
+        rng = np.random.default_rng(seed)
+        sample_indices = np.sort(rng.choice(total, size=sample_size, replace=False))
+        sample = embeddings[sample_indices]
+    else:
+        sample = embeddings
+
+    metric_k = min(_UMAP_QUALITY_K, max(sample.shape[0] - 1, 1))
+    default_config["metric_k"] = metric_k
+    if metric_k < 2:
+        return default_config
+
+    high_indices, _ = _cosine_knn(sample, metric_k + 1)
+    high_neighbors = high_indices[:, 1:]
+
+    best: Optional[dict[str, Any]] = None
+    for n_neighbors, min_dist in _UMAP_PARAM_CANDIDATES:
+        try:
+            coords = _fit_umap_with_precomputed_knn(
+                sample,
+                n_neighbors=n_neighbors,
+                n_components=2,
+                min_dist=min_dist,
+            )
+            trust = float(
+                trustworthiness(
+                    sample,
+                    coords,
+                    n_neighbors=metric_k,
+                    metric="cosine",
+                )
+            )
+            low_model = NearestNeighbors(
+                n_neighbors=min(metric_k + 1, sample.shape[0]),
+                metric="euclidean",
+            )
+            low_model.fit(coords)
+            low_neighbors = low_model.kneighbors(return_distance=False)[:, 1:]
+            overlap = _knn_overlap(high_neighbors, low_neighbors)
+            score = (0.7 * trust) + (0.3 * overlap)
+            candidate = {
+                "n_neighbors": int(n_neighbors),
+                "min_dist": float(min_dist),
+                "score": float(score),
+                "trustworthiness": float(trust),
+                "knn_overlap": float(overlap),
+                "metric_k": int(metric_k),
+                "sample_size": int(sample.shape[0]),
+                "candidate_count": len(_UMAP_PARAM_CANDIDATES),
+            }
+            if best is None or candidate["score"] > best["score"]:
+                best = candidate
+        except Exception:
+            continue
+
+    return best if best is not None else default_config
+
+
+def _get_or_build_umap_config(corpus_key: str, embeddings: np.ndarray) -> dict[str, Any]:
+    with _UMAP_CONFIG_LOCK:
+        cached = _UMAP_CONFIG_CACHE.get(corpus_key)
+    if cached is not None:
+        return cached
+
+    tuned = _tune_umap_config(corpus_key, embeddings)
+    with _UMAP_CONFIG_LOCK:
+        _UMAP_CONFIG_CACHE.clear()
+        _UMAP_CONFIG_CACHE[corpus_key] = tuned
+    return tuned
+
+
 def _get_or_build_umap_2d(corpus_key: str, embeddings: np.ndarray) -> np.ndarray:
     with _UMAP_2D_LOCK:
         cached = _UMAP_2D_CACHE.get(corpus_key)
     if cached is not None:
         return cached
 
-    umap_2d = UMAP(
-        n_neighbors=15,
-        n_components=2,
-        min_dist=0.0,
-        metric="cosine",
-        random_state=42,
-    )
-    coords = umap_2d.fit_transform(embeddings)
+    config = _get_or_build_umap_config(corpus_key, embeddings)
+    try:
+        coords = _fit_umap_with_precomputed_knn(
+            embeddings,
+            n_neighbors=int(config.get("n_neighbors", 15)),
+            n_components=2,
+            min_dist=float(config.get("min_dist", 0.0)),
+        )
+    except Exception:
+        # Fallback to conservative defaults if tuned parameters fail.
+        coords = _fit_umap_with_precomputed_knn(
+            embeddings,
+            n_neighbors=15,
+            n_components=2,
+            min_dist=0.0,
+        )
     with _UMAP_2D_LOCK:
         _UMAP_2D_CACHE.clear()
         _UMAP_2D_CACHE[corpus_key] = coords
@@ -273,19 +442,26 @@ def _build_base_topic_model(
         return cached
 
     min_cluster_size = max(15, min(25, n_posts // 400))
+    config = _get_or_build_umap_config(corpus_key, embeddings)
+    topic_neighbors = int(config.get("n_neighbors", 15))
+    topic_min_dist = float(config.get("min_dist", 0.0))
+    topic_knn_indices, topic_knn_distances = _cosine_knn(embeddings, topic_neighbors)
 
     umap_model = UMAP(
-        n_neighbors=15,
+        n_neighbors=int(topic_knn_indices.shape[1]),
         n_components=5,
-        min_dist=0.0,
+        min_dist=topic_min_dist,
         metric="cosine",
         random_state=42,
+        n_jobs=1,
+        precomputed_knn=(topic_knn_indices, topic_knn_distances, None),
     )
     hdbscan_model = HDBSCAN(
         min_cluster_size=min_cluster_size,
         metric="euclidean",
         cluster_selection_method="eom",
         prediction_data=True,
+        core_dist_n_jobs=1,
     )
     vectorizer_model = CountVectorizer(
         stop_words=sorted(_TOPIC_STOP_WORDS),
@@ -404,6 +580,50 @@ def _representative_post_indices_by_topic(
     return topic_to_ranked
 
 
+def _point_confidences(topic_model: BERTopic, expected_size: int) -> list[float]:
+    if expected_size <= 0:
+        return []
+
+    hdbscan_model = getattr(topic_model, "hdbscan_model", None)
+    raw_confidences = getattr(hdbscan_model, "probabilities_", None)
+    if raw_confidences is None:
+        return [0.0] * expected_size
+
+    confidences = np.asarray(raw_confidences, dtype=np.float32).flatten()
+    if confidences.size < expected_size:
+        padding = np.zeros(expected_size - confidences.size, dtype=np.float32)
+        confidences = np.concatenate((confidences, padding), axis=0)
+    if confidences.size > expected_size:
+        confidences = confidences[:expected_size]
+
+    clipped = np.clip(confidences, 0.0, 1.0)
+    return [float(value) for value in clipped]
+
+
+def _projection_quality_payload(
+    corpus_key: str,
+    embeddings: np.ndarray,
+    cluster_labels: list[int],
+) -> dict[str, Any]:
+    config = _get_or_build_umap_config(corpus_key, embeddings)
+    outlier_ratio = (
+        float(np.mean(np.asarray(cluster_labels, dtype=np.int32) == -1))
+        if cluster_labels
+        else 0.0
+    )
+    return {
+        "umap_n_neighbors": int(config.get("n_neighbors", 15)),
+        "umap_min_dist": float(config.get("min_dist", 0.0)),
+        "trustworthiness_at_k": _as_optional_float(config.get("trustworthiness")),
+        "knn_overlap_at_k": _as_optional_float(config.get("knn_overlap")),
+        "tuning_score": _as_optional_float(config.get("score")),
+        "metric_k": int(config.get("metric_k", _UMAP_QUALITY_K)),
+        "sample_size": int(config.get("sample_size", min(len(cluster_labels), _UMAP_TUNE_SAMPLE_SIZE))),
+        "point_count": int(len(cluster_labels)),
+        "outlier_ratio": outlier_ratio,
+    }
+
+
 def _build_cluster_result(
     topic_model: BERTopic,
     topics: list[int],
@@ -411,6 +631,8 @@ def _build_cluster_result(
     embeddings: np.ndarray,
     coords_2d: np.ndarray,
     post_ids: list[str],
+    point_confidences: list[float],
+    projection_quality: dict[str, Any],
 ) -> dict[str, Any]:
     topic_info = topic_model.get_topic_info()
     topic_name_map = {
@@ -466,6 +688,8 @@ def _build_cluster_result(
         "samples": sample_posts,
         "umap_2d": coords_2d.tolist(),
         "post_ids": post_ids,
+        "point_confidences": point_confidences,
+        "projection_quality": projection_quality,
     }
 
 
@@ -517,13 +741,22 @@ def run_clustering(n_topics: int) -> dict[str, Any]:
     natural_topics = _natural_topic_count(base_model)
 
     target_topics = max(2, min(n_topics, natural_topics)) if natural_topics > 1 else 1
+    reduction_error: Optional[str] = None
     if target_topics >= natural_topics:
         working_model = base_model
     else:
         working_model = copy.deepcopy(base_model)
-        working_model.reduce_topics(texts, nr_topics=target_topics)
+        try:
+            working_model.reduce_topics(texts, nr_topics=target_topics)
+        except Exception as exc:
+            # Gracefully fall back to natural topics when BERTopic reduction fails.
+            reduction_error = str(exc)
+            working_model = base_model
+            target_topics = natural_topics
 
     assignments = [int(topic_id) for topic_id in working_model.topics_]
+    point_confidences = _point_confidences(working_model, len(assignments))
+    projection_quality = _projection_quality_payload(corpus_key, embeddings, assignments)
     result = _build_cluster_result(
         topic_model=working_model,
         topics=assignments,
@@ -531,7 +764,13 @@ def run_clustering(n_topics: int) -> dict[str, Any]:
         embeddings=embeddings,
         coords_2d=coords_2d,
         post_ids=post_ids,
+        point_confidences=point_confidences,
+        projection_quality=projection_quality,
     )
+    result["natural_topics"] = natural_topics
+    result["target_topics"] = target_topics
+    if reduction_error:
+        result["topic_reduction_error"] = reduction_error
 
     _set_cached(corpus_key, n_topics, result)
     if target_topics != n_topics:
@@ -543,7 +782,14 @@ def run_embedding_projection(n_clusters: int) -> dict[str, Any]:
     cluster_result = run_clustering(n_clusters)
     post_ids = list(cluster_result.get("post_ids", []))
     if not post_ids:
-        return {"umap_2d": [], "cluster_labels": [], "post_ids": [], "point_labels": []}
+        return {
+            "umap_2d": [],
+            "cluster_labels": [],
+            "post_ids": [],
+            "point_labels": [],
+            "point_confidences": [],
+            "projection_quality": {},
+        }
 
     corpus_key = _corpus_key(post_ids)
     cache_key = (corpus_key, n_clusters)
@@ -561,6 +807,8 @@ def run_embedding_projection(n_clusters: int) -> dict[str, Any]:
         "cluster_labels": cluster_result.get("cluster_labels", []),
         "post_ids": post_ids,
         "point_labels": point_labels,
+        "point_confidences": cluster_result.get("point_confidences", []),
+        "projection_quality": cluster_result.get("projection_quality", {}),
     }
     with _EMBEDDING_VIEW_CACHE_LOCK:
         _EMBEDDING_VIEW_CACHE[cache_key] = copy.deepcopy(result)

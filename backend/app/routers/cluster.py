@@ -63,4 +63,6 @@ async def get_cluster_embeddings(
         "cluster_labels": result.get("cluster_labels", []),
         "post_ids": result.get("post_ids", []),
         "point_labels": result.get("point_labels", []),
+        "point_confidences": result.get("point_confidences", []),
+        "projection_quality": result.get("projection_quality", {}),
     }

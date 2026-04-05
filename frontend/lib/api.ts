@@ -137,6 +137,18 @@ export interface EmbeddingsResult {
   cluster_labels: number[];
   post_ids: string[];
   point_labels?: string[];
+  point_confidences?: number[];
+  projection_quality?: {
+    umap_n_neighbors: number;
+    umap_min_dist: number;
+    trustworthiness_at_k: number | null;
+    knn_overlap_at_k: number | null;
+    tuning_score: number | null;
+    metric_k: number;
+    sample_size: number;
+    point_count: number;
+    outlier_ratio: number;
+  };
 }
 
 export async function getEmbeddings(n_clusters = 10): Promise<EmbeddingsResult> {

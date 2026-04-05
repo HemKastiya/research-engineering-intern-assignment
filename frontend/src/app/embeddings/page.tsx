@@ -14,6 +14,7 @@ const ScatterPlot = dynamic(() => import("@/components/charts/ScatterPlot"), {
 
 export default function EmbeddingsPage() {
   const [nClusters, setNClusters] = useState(10);
+  const [showOutliers, setShowOutliers] = useState(true);
   const [data, setData] = useState<EmbeddingsResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +54,42 @@ export default function EmbeddingsPage() {
         <button onClick={() => fetchData(nClusters)} className="press-btn press-btn-ghost" disabled={isLoading}>
           {isLoading ? "Loading..." : "Apply"}
         </button>
+        <label className="data-label ml-1 inline-flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={showOutliers}
+            onChange={(e) => setShowOutliers(e.target.checked)}
+            className="h-3.5 w-3.5 accent-accent"
+          />
+          Show outliers
+        </label>
         <p className="byline ml-auto">Scroll to zoom | drag to pan</p>
       </div>
+
+      {data?.projection_quality && (
+        <div className="press-card press-card-brief mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+          <p className="data-label">
+            Trustworthiness@{data.projection_quality.metric_k}:{" "}
+            {typeof data.projection_quality.trustworthiness_at_k === "number"
+              ? data.projection_quality.trustworthiness_at_k.toFixed(3)
+              : "n/a"}
+          </p>
+          <p className="data-label">
+            kNN overlap@{data.projection_quality.metric_k}:{" "}
+            {typeof data.projection_quality.knn_overlap_at_k === "number"
+              ? data.projection_quality.knn_overlap_at_k.toFixed(3)
+              : "n/a"}
+          </p>
+          <p className="data-label">
+            Outliers: {(data.projection_quality.outlier_ratio * 100).toFixed(1)}%
+          </p>
+          <p className="data-label">
+            UMAP params: n_neighbors={data.projection_quality.umap_n_neighbors}, min_dist=
+            {data.projection_quality.umap_min_dist}
+          </p>
+          <p className="byline">Auto-tuned on {data.projection_quality.sample_size} sampled points</p>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4">
@@ -71,7 +106,7 @@ export default function EmbeddingsPage() {
             </div>
           </div>
         ) : (
-          <ScatterPlot data={data} isLoading={isLoading} />
+          <ScatterPlot data={data} isLoading={isLoading} showOutliers={showOutliers} />
         )}
       </div>
 
