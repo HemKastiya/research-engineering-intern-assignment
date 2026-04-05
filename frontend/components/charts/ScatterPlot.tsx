@@ -85,7 +85,7 @@ export default function ScatterPlot({ data, isLoading, titles, showOutliers = tr
 
     const xScale = d3
       .scaleLinear()
-      .domain([d3.min(xs)! - 0.5, d3.max(xs)! + 0.5])
+      .domain([d3.min(xs)!, d3.max(xs)! + 0.5])
       .range([margin.left, width - margin.right]);
 
     const yScale = d3

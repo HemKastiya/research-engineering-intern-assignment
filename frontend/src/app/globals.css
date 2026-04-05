@@ -72,7 +72,7 @@
 
 @layer components {
   .edition-shell {
-    max-width: 1520px;
+    
     margin: 0 auto;
     position: relative;
     background: rgba(247, 243, 236, 0.96);
@@ -91,7 +91,7 @@
   .edition-main {
     position: relative;
     z-index: 1;
-    max-width: 1400px;
+    max-width: 1520px;
     margin: 0 auto;
     padding: 2rem 1.5rem 2.5rem;
   }

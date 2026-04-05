@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import asyncio
 
 from core.chroma import ensure_collection
+from core.config import settings
 from core.embedding_store import count_chroma_vectors
 from core.mongo import client as mongo_client, ensure_posts_indexes
 from app.routers import ingest, timeseries, search, cluster, network, chat
@@ -74,7 +75,7 @@ app = FastAPI(title="Reddit Investigator API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
