@@ -5,7 +5,6 @@ import asyncio
 import threading
 from typing import Any, Optional
 
-import chromadb
 import pymongo
 
 from core.config import settings
@@ -13,10 +12,11 @@ from core.embedding_store import (
     clear_mongo_embeddings,
     count_mongo_embeddings,
     ensure_embeddings_indexes,
-    restore_chroma_from_mongo_embeddings,
-    seed_mongo_embeddings_from_chroma,
+    restore_pinecone_from_mongo_embeddings,
+    seed_mongo_embeddings_from_pinecone,
     upsert_mongo_embeddings,
 )
+from core.pinecone import ensure_index, get_pinecone_index, get_pinecone_namespace
 from ml.clusterer import clear_cluster_cache, run_clustering
 from ml.embedder import embed
 
@@ -25,7 +25,7 @@ _embedding_task: Optional[asyncio.Task[None]] = None
 _last_embedding_error: Optional[str] = None
 
 
-def _process_batch(chroma_collection, mongo_db, docs: list[dict[str, Any]]) -> None:
+def _process_batch(pinecone_index, mongo_db, docs: list[dict[str, Any]]) -> None:
     title_texts: list[str] = []
     title_docs: list[dict[str, Any]] = []
     body_texts: list[str] = []
@@ -87,12 +87,11 @@ def _process_batch(chroma_collection, mongo_db, docs: list[dict[str, Any]]) -> N
             )
 
     if ids:
-        chroma_collection.upsert(
-            ids=ids,
-            embeddings=embeddings,
-            metadatas=metadatas,
-            documents=documents,
-        )
+        vectors = [
+            {"id": vector_id, "values": vector, "metadata": metadata}
+            for vector_id, vector, metadata in zip(ids, embeddings, metadatas)
+        ]
+        pinecone_index.upsert(vectors=vectors, namespace=get_pinecone_namespace())
         try:
             upsert_mongo_embeddings(
                 mongo_db,
@@ -112,19 +111,12 @@ def _embed_all_sync() -> None:
     try:
         ensure_embeddings_indexes(db)
 
-        chroma_client = chromadb.HttpClient(
-            host=settings.CHROMA_HOST,
-            port=str(settings.CHROMA_PORT),
-        )
-        # Full rebuild path: reset collection to avoid stale mixed-schema vectors.
+        collection = ensure_index()
+        # Full rebuild path: reset namespace to avoid stale mixed-schema vectors.
         try:
-            chroma_client.delete_collection(settings.CHROMA_COLLECTION)
+            collection.delete(delete_all=True, namespace=get_pinecone_namespace())
         except Exception:
             pass
-        collection = chroma_client.get_or_create_collection(
-            name=settings.CHROMA_COLLECTION,
-            metadata={"hnsw:space": "cosine"},
-        )
         clear_mongo_embeddings(db)
 
         cursor = db.posts.find()
@@ -205,9 +197,9 @@ async def rebuild_clusters_async(n_topics: int) -> dict[str, Any]:
     return await asyncio.to_thread(run_clustering, n_topics)
 
 
-def restore_chroma_from_mongo() -> int:
+def restore_pinecone_from_mongo() -> int:
     """
-    Rehydrates Chroma vectors from Mongo embedding backup.
+    Rehydrates Pinecone vectors from Mongo embedding backup.
     Returns number of vectors restored.
     """
     client = pymongo.MongoClient(settings.MONGO_URI)
@@ -217,23 +209,20 @@ def restore_chroma_from_mongo() -> int:
         if count_mongo_embeddings(db) == 0:
             return 0
 
-        chroma_client = chromadb.HttpClient(
-            host=settings.CHROMA_HOST,
-            port=str(settings.CHROMA_PORT),
+        collection = ensure_index()
+        return restore_pinecone_from_mongo_embeddings(
+            db,
+            collection,
+            namespace=get_pinecone_namespace(),
         )
-        collection = chroma_client.get_or_create_collection(
-            name=settings.CHROMA_COLLECTION,
-            metadata={"hnsw:space": "cosine"},
-        )
-        return restore_chroma_from_mongo_embeddings(db, collection)
     finally:
         client.close()
 
 
-def seed_mongo_from_chroma_if_empty() -> int:
+def seed_mongo_from_pinecone_if_empty() -> int:
     """
-    One-time bootstrap path: if Mongo embedding backup is empty but Chroma has vectors,
-    copy current Chroma vectors into Mongo backup storage.
+    One-time bootstrap path: if Mongo embedding backup is empty but Pinecone has vectors,
+    copy current Pinecone vectors into Mongo backup storage.
     """
     client = pymongo.MongoClient(settings.MONGO_URI)
     db = client[settings.MONGO_DB]
@@ -242,18 +231,22 @@ def seed_mongo_from_chroma_if_empty() -> int:
         if count_mongo_embeddings(db) > 0:
             return 0
 
-        chroma_client = chromadb.HttpClient(
-            host=settings.CHROMA_HOST,
-            port=str(settings.CHROMA_PORT),
-        )
-        collection = chroma_client.get_or_create_collection(
-            name=settings.CHROMA_COLLECTION,
-            metadata={"hnsw:space": "cosine"},
-        )
-        return seed_mongo_embeddings_from_chroma(
+        collection = get_pinecone_index()
+        return seed_mongo_embeddings_from_pinecone(
             db,
             collection,
             only_if_empty=True,
+            namespace=get_pinecone_namespace(),
         )
     finally:
         client.close()
+
+
+def restore_chroma_from_mongo() -> int:
+    # Backwards-compat alias.
+    return restore_pinecone_from_mongo()
+
+
+def seed_mongo_from_chroma_if_empty() -> int:
+    # Backwards-compat alias.
+    return seed_mongo_from_pinecone_if_empty()

@@ -23,7 +23,6 @@ export default function Masthead({ totalRecords, dateRange }: MastheadProps) {
       <div className="mb-3 border-t border-rule" />
 
       <div className="px-2 text-center">
-        <p className="kicker mb-1 text-ink">Data Intelligence Desk</p>
         <h1 className="masthead-text tracking-tight">{mastheadTokens.name}</h1>
         <p className="byline mt-1 text-[0.64rem] uppercase tracking-[0.24em]">
           {mastheadTokens.tagline}

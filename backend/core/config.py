@@ -9,10 +9,13 @@ class Settings(BaseSettings):
     MONGO_DB: str = "reddit_investigator"
     MONGO_EMBEDDINGS_COLLECTION: str = "post_embeddings"
     
-    CHROMA_HOST: str = "localhost"
-    CHROMA_PORT: int = 8000
-    CHROMA_COLLECTION: str = "reddit_posts"
-    CHROMA_SSL: bool = False
+    PINECONE_API_KEY: str
+    PINECONE_INDEX_NAME: str
+    PINECONE_INDEX_HOST: str = ""
+    PINECONE_NAMESPACE: str = "reddit_posts"
+    PINECONE_CLOUD: str = ""
+    PINECONE_REGION: str = ""
+    PINECONE_AUTO_CREATE: bool = False
 
     GEMINI_API_KEY: str
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])

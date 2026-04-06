@@ -1,16 +1,16 @@
-"""Health check: MongoDB, ChromaDB, Gemini API key."""
+"""Health check: MongoDB, Pinecone, Gemini API key."""
 import os
 import sys
 
 # Add backend root to Python path so scripts can import core/ml packages.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import chromadb
 import google.generativeai as genai
 import pymongo
 
 from core.config import settings
 from core.embedding_store import count_mongo_embeddings, ensure_embeddings_indexes
+from core.pinecone import get_pinecone_index, get_pinecone_namespace, get_namespace_vector_count
 
 POSTS_TEXT_INDEX_NAME = "posts_text_search"
 
@@ -77,20 +77,14 @@ def verify_setup() -> None:
         print(f"[ERR] MongoDB: {exc}")
         errors += 1
 
-    # 2. ChromaDB
+    # 2. Pinecone
     try:
-        chroma_client = chromadb.HttpClient(
-            host=settings.CHROMA_HOST,
-            port=str(settings.CHROMA_PORT),
-        )
-        collection = chroma_client.get_collection(settings.CHROMA_COLLECTION)
-        if hasattr(collection, "count"):
-            c_count = collection.count()
-        else:
-            c_count = len(collection.get()["ids"])
-        print(f"[OK] ChromaDB connection (vectors: {c_count})")
+        index = get_pinecone_index()
+        namespace = get_pinecone_namespace()
+        c_count = get_namespace_vector_count(index, namespace)
+        print(f"[OK] Pinecone connection (namespace vectors: {c_count})")
     except Exception as exc:
-        print(f"[ERR] ChromaDB: {exc}")
+        print(f"[ERR] Pinecone: {exc}")
         errors += 1
 
     # 3. Gemini

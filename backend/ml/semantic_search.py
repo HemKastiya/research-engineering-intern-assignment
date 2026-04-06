@@ -1,10 +1,9 @@
 import re
 from typing import Any, Dict, List
 from ml.embedder import embed
-from core.chroma import get_chroma
+from core.pinecone import get_pinecone_index, get_pinecone_namespace
 from core.mongo import db
 from core.schemas import SearchResult, PostDocument
-from core.config import settings
 
 _MIN_SELFTEXT_WORDS = 6
 _REDDIT_POST_ID_PATTERN = re.compile(r"/comments/([a-z0-9]+)/", re.IGNORECASE)
@@ -15,6 +14,18 @@ def _canonical_post_id(chroma_id: str) -> str:
     if chroma_id.endswith("_title") or chroma_id.endswith("_body"):
         return chroma_id.rsplit("_", 1)[0]
     return chroma_id
+
+
+def _match_id(match: Any) -> str:
+    if isinstance(match, dict):
+        return str(match.get("id") or "")
+    return str(getattr(match, "id", "") or "")
+
+
+def _match_score(match: Any) -> float:
+    if isinstance(match, dict):
+        return float(match.get("score") or 0.0)
+    return float(getattr(match, "score", 0.0) or 0.0)
 
 
 def _clean_text(value: Any) -> str:
@@ -57,19 +68,31 @@ def _result_priority(doc: dict[str, Any]) -> int:
     return 0 if _has_own_selftext(doc) and _extract_referenced_post_id(doc) is None else 1
 
 
-def _dedup_chroma_hits(ids: list[str], distances: list[float]) -> list[tuple[str, float]]:
+def _normalize_similarity(score: float) -> float:
+    try:
+        value = float(score)
+    except Exception:
+        return 0.0
+    if value < 0:
+        return 0.0
+    if value > 1:
+        return 1.0
+    return value
+
+
+def _dedup_hits(ids: list[str], scores: list[float]) -> list[tuple[str, float]]:
     best_by_post: dict[str, float] = {}
     for index, chunk_id in enumerate(ids):
-        dist = 2.0
-        if index < len(distances) and distances[index] is not None:
-            dist = float(distances[index])
+        score = 0.0
+        if index < len(scores) and scores[index] is not None:
+            score = float(scores[index])
 
         post_id = _canonical_post_id(chunk_id)
         current = best_by_post.get(post_id)
-        if current is None or dist < current:
-            best_by_post[post_id] = dist
+        if current is None or score > current:
+            best_by_post[post_id] = score
 
-    ranked = sorted(best_by_post.items(), key=lambda item: item[1])
+    ranked = sorted(best_by_post.items(), key=lambda item: item[1], reverse=True)
     return ranked
 
 
@@ -80,38 +103,43 @@ async def search(query: str, top_k: int, filters: Dict) -> List[SearchResult]:
     # 1. Embed query 
     query_vector = embed([query])[0].tolist()
     
-    # 2. Build Chroma Where clause
+    # 2. Build Pinecone filter clause
     where_clause = {}
     if "subreddit" in filters:
-        where_clause["subreddit"] = filters["subreddit"]
+        where_clause["subreddit"] = {"$eq": filters["subreddit"]}
         
-    chroma_client = get_chroma()
-    collection = chroma_client.get_collection(settings.CHROMA_COLLECTION)
+    index = get_pinecone_index()
+    namespace = get_pinecone_namespace()
     
-    # 3. Query Chroma
-    chroma_results = collection.query(
-        query_embeddings=[query_vector],
-        n_results=max(top_k * 3, top_k),
-        where=where_clause if where_clause else None
+    # 3. Query Pinecone
+    pinecone_results = index.query(
+        namespace=namespace,
+        vector=query_vector,
+        top_k=max(top_k * 3, top_k),
+        filter=where_clause if where_clause else None,
+        include_values=False,
+        include_metadata=False,
     )
-    
-    if not chroma_results["ids"] or not chroma_results["ids"][0]:
+
+    if isinstance(pinecone_results, dict):
+        matches = pinecone_results.get("matches") or []
+    else:
+        matches = getattr(pinecone_results, "matches", []) or []
+
+    if not matches:
         return []
         
-    chunk_ids = [str(item) for item in chroma_results["ids"][0]]
-    distances = [
-        float(item) if item is not None else 2.0
-        for item in chroma_results["distances"][0]
-    ]
-    dedup_hits = _dedup_chroma_hits(chunk_ids, distances)
+    chunk_ids = [_match_id(match) for match in matches]
+    scores = [_match_score(match) for match in matches]
+    dedup_hits = _dedup_hits(chunk_ids, scores)
     if not dedup_hits:
         return []
 
     post_ids = [post_id for post_id, _ in dedup_hits[:top_k]]
-    distance_map = {post_id: dist for post_id, dist in dedup_hits}
+    score_map = {post_id: score for post_id, score in dedup_hits}
      
     # 4. Fetch full documents from MongoDB
-    # Note: Chroma returns cosine distances (closer to 0 is better if configured internally)
+    # Pinecone returns similarity scores (higher is better for cosine).
     cursor = db.posts.find({"post_id": {"$in": post_ids}})
     docs_list = await cursor.to_list(length=len(post_ids))
 
@@ -153,8 +181,8 @@ async def search(query: str, top_k: int, filters: Dict) -> List[SearchResult]:
             if referenced_id and referenced_id != pid and referenced_id in doc_map:
                 selected_doc = doc_map[referenced_id]
 
-        dist = float(distance_map.get(pid, 2.0))
-        ranked_candidates.append((_result_priority(selected_doc), dist, selected_doc))
+        score = float(score_map.get(pid, 0.0))
+        ranked_candidates.append((_result_priority(selected_doc), -score, selected_doc))
 
     if not ranked_candidates:
         return []
@@ -171,8 +199,8 @@ async def search(query: str, top_k: int, filters: Dict) -> List[SearchResult]:
 
     ordered = sorted(best_by_post_id.values(), key=lambda item: (item[0], item[1]))[:top_k]
 
-    for _, dist, doc in ordered:
-        relevance_score = max(0.0, min(1.0, 1.0 - (dist / 2.0)))
+    for _, neg_score, doc in ordered:
+        relevance_score = _normalize_similarity(-neg_score)
         post = PostDocument(**doc)
         final_results.append(SearchResult(post=post, relevance_score=relevance_score))
 

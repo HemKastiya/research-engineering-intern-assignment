@@ -2,8 +2,9 @@
 fastapi
 uvicorn
 motor
-chromadb
-fastembed
+pinecone[grpc]
+protobuf
+sentence-transformers
 pydantic
 pydantic-settings
 huggingface-hub
@@ -14,3 +15,4 @@ umap-learn
 networkx
 scikit-learn
 python-multipart
+python-louvain

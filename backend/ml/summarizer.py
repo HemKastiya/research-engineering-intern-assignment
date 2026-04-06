@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 import google.generativeai as genai
 
-from core.chroma import get_chroma
+from core.pinecone import get_pinecone_index, get_pinecone_namespace
 from core.config import settings
 from core.mongo import db
 from ml.embedder import embed
@@ -182,20 +182,44 @@ def _bm25_score_documents(query_terms: list[str], docs: dict[str, dict[str, Any]
     return bm25_scores
 
 
-def _dedup_chroma_hits(ids: list[str], distances: list[float]) -> list[tuple[str, float]]:
+def _normalize_similarity(score: float) -> float:
+    try:
+        value = float(score)
+    except Exception:
+        return 0.0
+    if value < 0:
+        return 0.0
+    if value > 1:
+        return 1.0
+    return value
+
+
+def _match_id(match: Any) -> str:
+    if isinstance(match, dict):
+        return str(match.get("id") or "")
+    return str(getattr(match, "id", "") or "")
+
+
+def _match_score(match: Any) -> float:
+    if isinstance(match, dict):
+        return float(match.get("score") or 0.0)
+    return float(getattr(match, "score", 0.0) or 0.0)
+
+
+def _dedup_hits(ids: list[str], scores: list[float]) -> list[tuple[str, float]]:
     best_by_post: dict[str, tuple[str, float, int]] = {}
 
     for index, chunk_id in enumerate(ids, start=1):
-        dist = 2.0
-        if index - 1 < len(distances) and distances[index - 1] is not None:
-            dist = float(distances[index - 1])
+        score = 0.0
+        if index - 1 < len(scores) and scores[index - 1] is not None:
+            score = float(scores[index - 1])
 
         post_id = _canonical_post_id(chunk_id)
         current = best_by_post.get(post_id)
-        if current is None or dist < current[1]:
-            best_by_post[post_id] = (chunk_id, dist, index)
+        if current is None or score > current[1]:
+            best_by_post[post_id] = (chunk_id, score, index)
 
-    ranked = sorted(best_by_post.items(), key=lambda item: (item[1][1], item[1][2]))
+    ranked = sorted(best_by_post.items(), key=lambda item: (-item[1][1], item[1][2]))
     return [(post_id, value[1]) for post_id, value in ranked]
 
 
@@ -206,30 +230,45 @@ async def _dense_retrieve(expanded_queries: list[str], per_query_limit: int = 20
     query_embeddings = await asyncio.to_thread(embed, expanded_queries)
     query_embedding_list = query_embeddings.tolist()
 
-    def _query_chroma() -> dict[str, Any]:
-        chroma_client = get_chroma()
-        collection = chroma_client.get_collection(settings.CHROMA_COLLECTION)
-        return collection.query(
-            query_embeddings=query_embedding_list,
-            n_results=per_query_limit,
-            include=["distances"],
-        )
+    namespace = get_pinecone_namespace()
 
-    raw = await asyncio.to_thread(_query_chroma)
-    ids_by_query = raw.get("ids") or []
-    distances_by_query = raw.get("distances") or []
+    async def _query_one(vector: list[float]) -> Any:
+        def _call() -> Any:
+            index = get_pinecone_index()
+            return index.query(
+                namespace=namespace,
+                vector=vector,
+                top_k=per_query_limit,
+                include_metadata=False,
+                include_values=False,
+            )
+
+        return await asyncio.to_thread(_call)
+
+    results = await asyncio.gather(
+        *[_query_one(vector) for vector in query_embedding_list],
+        return_exceptions=True,
+    )
 
     dense_signals: dict[str, dict[str, float]] = {}
-    for query_index, ids in enumerate(ids_by_query):
-        distances = distances_by_query[query_index] if query_index < len(distances_by_query) else []
-        normalized_distances = [
-            float(item) if item is not None else 2.0
-            for item in distances
-        ]
-        dedup_hits = _dedup_chroma_hits([str(item) for item in ids], normalized_distances)
+    for result in results:
+        if isinstance(result, Exception):
+            continue
 
-        for rank_index, (post_id, dist) in enumerate(dedup_hits, start=1):
-            similarity = max(0.0, 1.0 - (dist / 2.0))
+        if isinstance(result, dict):
+            matches = result.get("matches") or []
+        else:
+            matches = getattr(result, "matches", []) or []
+
+        if not matches:
+            continue
+
+        ids = [_match_id(match) for match in matches]
+        scores = [_match_score(match) for match in matches]
+        dedup_hits = _dedup_hits(ids, scores)
+
+        for rank_index, (post_id, score) in enumerate(dedup_hits, start=1):
+            similarity = _normalize_similarity(score)
             signal = dense_signals.setdefault(
                 post_id,
                 {"dense_similarity": 0.0, "dense_rank": float(rank_index), "dense_rrf": 0.0},

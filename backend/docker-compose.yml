@@ -11,22 +11,13 @@ services:
     environment:
       - MONGO_URI=${MONGO_URI}
       - MONGO_DB=${MONGO_DB:-SimLLP}
-      - CHROMA_HOST=chroma
-      - CHROMA_PORT=8000
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME}
+      - PINECONE_INDEX_HOST=${PINECONE_INDEX_HOST}
+      - PINECONE_NAMESPACE=${PINECONE_NAMESPACE:-reddit_posts}
+      - PINECONE_CLOUD=${PINECONE_CLOUD}
+      - PINECONE_REGION=${PINECONE_REGION}
+      - PINECONE_AUTO_CREATE=${PINECONE_AUTO_CREATE}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS}
-    depends_on:
-      - chroma
     restart: always
-
-  chroma:
-    image: chromadb/chroma:latest
-    container_name: reddit-investigator-chroma
-    ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/data
-    restart: always
-
-volumes:
-  chroma_data:

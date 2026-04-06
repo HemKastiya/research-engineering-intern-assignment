@@ -266,59 +266,43 @@ def clear_cluster_cache() -> None:
         _EMBEDDING_VIEW_CACHE.clear()
 
 
-def _load_vector_map_from_chroma() -> dict[str, np.ndarray]:
+def _load_vector_map_from_mongo() -> dict[str, np.ndarray]:
+    sync_mongo = SynchronousMongo()
     try:
-        from core.chroma import get_chroma
+        collection = sync_mongo.db[settings.MONGO_EMBEDDINGS_COLLECTION]
+        cursor = collection.find(
+            {},
+            {"embedding": 1, "metadata": 1, "post_id": 1},
+        )
+        sums: dict[str, np.ndarray] = {}
+        counts: dict[str, int] = {}
 
-        chroma = get_chroma()
-        collection = chroma.get_collection(settings.CHROMA_COLLECTION)
-        total = collection.count() if hasattr(collection, "count") else None
-        if total is not None and total > 0:
-            payload = collection.get(limit=total, include=["embeddings", "metadatas"])
-        else:
-            payload = collection.get(include=["embeddings", "metadatas"])
+        for row in cursor:
+            vector = row.get("embedding")
+            if vector is None:
+                continue
+
+            metadata = row.get("metadata") or {}
+            post_id = str(metadata.get("post_id") or row.get("post_id") or "").strip()
+            if not post_id:
+                continue
+
+            vector_np = np.asarray(vector, dtype=np.float32)
+            if post_id in sums:
+                sums[post_id] += vector_np
+                counts[post_id] += 1
+            else:
+                sums[post_id] = vector_np.copy()
+                counts[post_id] = 1
+
+        return {
+            post_id: (sums[post_id] / counts[post_id]).astype(np.float32, copy=False)
+            for post_id in sums
+        }
     except Exception:
         return {}
-
-    raw_embeddings = payload.get("embeddings")
-    raw_metadatas = payload.get("metadatas")
-    if raw_embeddings is None or raw_metadatas is None:
-        return {}
-
-    if isinstance(raw_embeddings, np.ndarray):
-        embeddings = raw_embeddings.tolist()
-    else:
-        embeddings = list(raw_embeddings)
-    if isinstance(raw_metadatas, np.ndarray):
-        metadatas = raw_metadatas.tolist()
-    else:
-        metadatas = list(raw_metadatas)
-    if len(embeddings) == 0 or len(metadatas) == 0:
-        return {}
-
-    limit = min(len(embeddings), len(metadatas))
-    sums: dict[str, np.ndarray] = {}
-    counts: dict[str, int] = {}
-
-    for index in range(limit):
-        vector = embeddings[index]
-        metadata = metadatas[index] or {}
-        post_id = str(metadata.get("post_id", "")).strip()
-        if not post_id or vector is None:
-            continue
-
-        vector_np = np.asarray(vector, dtype=np.float32)
-        if post_id in sums:
-            sums[post_id] += vector_np
-            counts[post_id] += 1
-        else:
-            sums[post_id] = vector_np.copy()
-            counts[post_id] = 1
-
-    return {
-        post_id: (sums[post_id] / counts[post_id]).astype(np.float32, copy=False)
-        for post_id in sums
-    }
+    finally:
+        sync_mongo.client.close()
 
 
 def _get_vector_map() -> dict[str, np.ndarray]:
@@ -327,7 +311,7 @@ def _get_vector_map() -> dict[str, np.ndarray]:
         if _VECTOR_MAP_CACHE is not None:
             return _VECTOR_MAP_CACHE
 
-    loaded = _load_vector_map_from_chroma()
+    loaded = _load_vector_map_from_mongo()
     with _VECTOR_MAP_LOCK:
         if _VECTOR_MAP_CACHE is None:
             _VECTOR_MAP_CACHE = loaded

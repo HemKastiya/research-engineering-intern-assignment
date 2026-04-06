@@ -1,11 +1,10 @@
-"""One-time script. MongoDB -> Embed -> upserts into Chroma + Mongo backup."""
+"""One-time script. MongoDB -> Embed -> upserts into Pinecone + Mongo backup."""
 import os
 import sys
 
 # Add the backend root to the python path so it can import 'core' and 'ml'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import chromadb
 import pymongo
 from core.config import settings
 from core.embedding_store import (
@@ -13,6 +12,7 @@ from core.embedding_store import (
     ensure_embeddings_indexes,
     upsert_mongo_embeddings,
 )
+from core.pinecone import ensure_index, get_pinecone_namespace
 from ml.embedder import embed
 import time
 
@@ -28,16 +28,12 @@ def build_embeddings():
               
          ensure_embeddings_indexes(db)
 
-         chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=str(settings.CHROMA_PORT))
+         collection = ensure_index()
          try:
-              chroma_client.delete_collection(settings.CHROMA_COLLECTION)
-              print("Deleted existing Chroma collection for clean rebuild.")
+              collection.delete(delete_all=True, namespace=get_pinecone_namespace())
+              print("Deleted existing Pinecone namespace for clean rebuild.")
          except Exception:
               pass
-         collection = chroma_client.get_or_create_collection(
-              name=settings.CHROMA_COLLECTION,
-              metadata={"hnsw:space": "cosine"}
-         )
          clear_mongo_embeddings(db)
          
          batch_size = 64
@@ -56,7 +52,7 @@ def build_embeddings():
                _process_batch(collection, db, docs)
                
          end = time.time()
-         print(f"Upserted embeddings into Chroma + Mongo backup in {end - start:.2f} seconds.")
+         print(f"Upserted embeddings into Pinecone + Mongo backup in {end - start:.2f} seconds.")
     finally:
          client.close()
 
@@ -118,12 +114,11 @@ def _process_batch(collection, db, docs):
                })
 
      if ids:
-          collection.upsert(
-               ids=ids,
-               embeddings=vectors,
-               metadatas=metadatas,
-               documents=texts
-          )
+          vectors_payload = [
+               {"id": vector_id, "values": vector, "metadata": metadata}
+               for vector_id, vector, metadata in zip(ids, vectors, metadatas)
+          ]
+          collection.upsert(vectors=vectors_payload, namespace=get_pinecone_namespace())
           try:
                upsert_mongo_embeddings(
                     db,

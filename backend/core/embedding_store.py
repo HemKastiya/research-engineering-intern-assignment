@@ -6,6 +6,7 @@ from typing import Any
 from pymongo import UpdateOne
 
 from core.config import settings
+from core.pinecone import get_pinecone_namespace, get_namespace_vector_count
 
 
 def get_embeddings_collection(db):
@@ -36,11 +37,13 @@ def clear_mongo_embeddings(db) -> None:
     get_embeddings_collection(db).delete_many({})
 
 
+def count_pinecone_vectors(index, namespace: str | None = None) -> int:
+    return get_namespace_vector_count(index, namespace)
+
+
 def count_chroma_vectors(collection) -> int:
-    if hasattr(collection, "count"):
-        return int(collection.count())
-    payload = collection.get()
-    return int(len(payload.get("ids", [])))
+    # Backwards-compat alias (collection is now a Pinecone index).
+    return count_pinecone_vectors(collection)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -140,10 +143,11 @@ def upsert_mongo_embeddings(
     return len(operations)
 
 
-def restore_chroma_from_mongo_embeddings(
+def restore_pinecone_from_mongo_embeddings(
     db,
-    chroma_collection,
+    pinecone_index,
     batch_size: int = 256,
+    namespace: str | None = None,
 ) -> int:
     collection = get_embeddings_collection(db)
     total = int(collection.count_documents({}))
@@ -151,10 +155,8 @@ def restore_chroma_from_mongo_embeddings(
         return 0
 
     restored = 0
-    ids: list[str] = []
-    embeddings: list[list[float]] = []
-    metadatas: list[dict[str, Any]] = []
-    documents: list[str] = []
+    vectors: list[dict[str, Any]] = []
+    namespace = namespace or get_pinecone_namespace()
 
     cursor = collection.find(
         {},
@@ -173,31 +175,102 @@ def restore_chroma_from_mongo_embeddings(
         if "chunk_type" not in metadata and row.get("chunk_type"):
             metadata["chunk_type"] = str(row.get("chunk_type"))
 
-        ids.append(vector_id)
-        embeddings.append([float(item) for item in vector])
-        metadatas.append(metadata)
-        documents.append(str(row.get("document", "") or ""))
-
-        if len(ids) >= batch_size:
-            chroma_collection.upsert(
-                ids=ids,
-                embeddings=embeddings,
-                metadatas=metadatas,
-                documents=documents,
-            )
-            restored += len(ids)
-            ids, embeddings, metadatas, documents = [], [], [], []
-
-    if ids:
-        chroma_collection.upsert(
-            ids=ids,
-            embeddings=embeddings,
-            metadatas=metadatas,
-            documents=documents,
+        vectors.append(
+            {
+                "id": vector_id,
+                "values": [float(item) for item in vector],
+                "metadata": metadata,
+            }
         )
-        restored += len(ids)
+
+        if len(vectors) >= batch_size:
+            pinecone_index.upsert(vectors=vectors, namespace=namespace)
+            restored += len(vectors)
+            vectors = []
+
+    if vectors:
+        pinecone_index.upsert(vectors=vectors, namespace=namespace)
+        restored += len(vectors)
 
     return restored
+
+
+def restore_chroma_from_mongo_embeddings(
+    db,
+    chroma_collection,
+    batch_size: int = 256,
+) -> int:
+    # Backwards-compat alias (collection is now a Pinecone index).
+    return restore_pinecone_from_mongo_embeddings(
+        db,
+        chroma_collection,
+        batch_size=batch_size,
+    )
+
+
+def seed_mongo_embeddings_from_pinecone(
+    db,
+    pinecone_index,
+    batch_size: int = 256,
+    only_if_empty: bool = True,
+    namespace: str | None = None,
+) -> int:
+    if only_if_empty and count_mongo_embeddings(db) > 0:
+        return 0
+
+    copied = 0
+    namespace = namespace or get_pinecone_namespace()
+
+    try:
+        id_pages = pinecone_index.list(namespace=namespace)
+    except Exception:
+        return 0
+
+    def _chunks(items: list[str], size: int) -> list[list[str]]:
+        return [items[i : i + size] for i in range(0, len(items), size)]
+
+    for ids in id_pages:
+        if not ids:
+            continue
+
+        for batch in _chunks([str(item) for item in ids], min(1000, batch_size)):
+            payload = pinecone_index.fetch(ids=batch, namespace=namespace)
+            if isinstance(payload, dict):
+                vectors_map = payload.get("vectors") or {}
+            else:
+                vectors_map = getattr(payload, "vectors", {}) or {}
+
+            batch_ids: list[str] = []
+            embeddings: list[list[float]] = []
+            metadatas: list[dict[str, Any]] = []
+            documents: list[str] = []
+
+            for vector_id, vector_payload in vectors_map.items():
+                if not vector_payload:
+                    continue
+                batch_ids.append(str(vector_id))
+
+                if isinstance(vector_payload, dict):
+                    values = vector_payload.get("values") or []
+                    metadata = dict(vector_payload.get("metadata") or {})
+                else:
+                    values = getattr(vector_payload, "values", []) or []
+                    metadata = dict(getattr(vector_payload, "metadata", {}) or {})
+
+                embeddings.append([float(item) for item in values])
+                metadatas.append(metadata)
+                documents.append(str(metadata.get("document", "") or ""))
+
+            if batch_ids:
+                copied += upsert_mongo_embeddings(
+                    db,
+                    ids=batch_ids,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                    documents=documents,
+                )
+
+    return copied
 
 
 def seed_mongo_embeddings_from_chroma(
@@ -206,36 +279,10 @@ def seed_mongo_embeddings_from_chroma(
     batch_size: int = 256,
     only_if_empty: bool = True,
 ) -> int:
-    if only_if_empty and count_mongo_embeddings(db) > 0:
-        return 0
-
-    total = count_chroma_vectors(chroma_collection)
-    if total == 0:
-        return 0
-
-    copied = 0
-    offset = 0
-    while offset < total:
-        payload = chroma_collection.get(
-            include=["embeddings", "metadatas", "documents"],
-            limit=batch_size,
-            offset=offset,
-        )
-        ids = [str(item) for item in _as_list(payload.get("ids"))]
-        if not ids:
-            break
-
-        embeddings = _as_list(payload.get("embeddings"))
-        metadatas = _as_list(payload.get("metadatas"))
-        documents = _as_list(payload.get("documents"))
-
-        copied += upsert_mongo_embeddings(
-            db,
-            ids=ids,
-            embeddings=embeddings,
-            metadatas=metadatas,
-            documents=documents,
-        )
-        offset += len(ids)
-
-    return copied
+    # Backwards-compat alias (collection is now a Pinecone index).
+    return seed_mongo_embeddings_from_pinecone(
+        db,
+        chroma_collection,
+        batch_size=batch_size,
+        only_if_empty=only_if_empty,
+    )

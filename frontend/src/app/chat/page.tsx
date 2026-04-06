@@ -67,7 +67,7 @@ export default function ChatPage() {
     <div className="news-section">
       <SectionHeading kicker="RAG Intelligence" title="Ask the Dataset" />
       <p className="byline mb-6">
-        Semantic retrieval + Gemini 1.5 Flash | Multilingual support | Sources included
+        Semantic retrieval + Gemini 2.5 Flash | Multilingual support | Sources included
       </p>
 
       <div className="flex overflow-hidden border-2 border-ink bg-paper" style={{ height: "calc(100vh - 300px)", minHeight: "500px" }}>
