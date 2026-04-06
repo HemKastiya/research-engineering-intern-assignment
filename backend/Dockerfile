@@ -21,10 +21,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first (better Docker caching)
+# Copy requirements file (already includes --extra-index-url for CPU)
 COPY requirements.txt .
 
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Create cache directory and set permissions for HF user 1000
+RUN mkdir -p /app/.cache && chmod -R 777 /app/.cache
 
 # Pre-download embedding model during build
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2')"
@@ -32,13 +36,12 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 # Copy application
 COPY . .
 
-# Create cache directory
-RUN mkdir -p /app/.cache
+# Set persistent data folder for permissions
+RUN chmod -R 777 /app
 
-# Railway uses dynamic ports
-ENV PORT=8000
+# HuggingFace default port is 7860
+ENV PORT=7860
+EXPOSE 7860
 
-EXPOSE 8000
-
-# Start FastAPI
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Start FastAPI on port 7860
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

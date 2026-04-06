@@ -5,7 +5,8 @@ from core.config import settings
 # ChromaDB uses a slightly different architecture; we'll connect utilizing HttpClient for the external docker container
 chroma_client = chromadb.HttpClient(
     host=settings.CHROMA_HOST, 
-    port=str(settings.CHROMA_PORT)
+    port=str(settings.CHROMA_PORT),
+    ssl=settings.CHROMA_SSL
 )
 
 def get_chroma():
