@@ -44,7 +44,7 @@ export default function SearchPage() {
 
   return (
     <div className="news-section">
-      <SectionHeading kicker="Semantic Search" title="Find Posts by Meaning" />
+      <SectionHeading kicker="Pensieve Search" title="Where meaning surfaces from memories." />
 
       <form onSubmit={handleSubmit} className="press-card press-card-brief mb-8">
         <div className="mb-2 flex max-w-3xl gap-2">

@@ -38,7 +38,7 @@ export default function EmbeddingsPage() {
 
   return (
     <div className="news-section">
-      <SectionHeading kicker="Embedding Space" title="UMAP 2D Projection" />
+      <SectionHeading kicker="Where concepts cluster and new territories emerge." title="The Map of Knowledge" />
 
       <div className="press-card press-card-brief mb-6 flex flex-wrap items-center gap-4 p-4">
         <label className="kicker whitespace-nowrap">Cluster count</label>

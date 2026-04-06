@@ -42,7 +42,7 @@ export default function ClustersPage() {
 
   return (
     <div className="news-section">
-      <SectionHeading kicker="Topic Modelling" title="BERTopic Clusters" />
+      <SectionHeading kicker="Every document finds the house it truly belongs." title="The Sorting Hat" />
 
       <div className="press-card press-card-brief mb-6">
         <TopicSlider value={nTopics} onChange={setNTopics} isLoading={isLoading} />
@@ -68,7 +68,7 @@ export default function ClustersPage() {
         <div className="lg:col-span-2">
           {activeTopicData ? (
             <div className="press-card press-card-brief h-full">
-              <p className="kicker mb-2">Topic {activeTopicData.topic_id} - Detail</p>
+              <p className="kicker mb-2">Topic {activeTopicData.topic_id + 1} - Detail</p>
               <h2 className="section-head mb-4">{activeTopicData.name || `Topic ${activeTopicData.topic_id}`}</h2>
 
               <div className="mb-4">

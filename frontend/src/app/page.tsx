@@ -34,7 +34,7 @@ export default function OverviewPage() {
   return (
     <div className="news-section">
       <div className="lead-banner">
-        <h2 className="lead-hed">Today in Research Intelligence</h2>
+        <h2 className="lead-hed">Today’s Owl Dispatch</h2>
         <p className="deck-text">Daily signals, indexing progress, and exploratory modules from your corpus.</p>
       </div>
 

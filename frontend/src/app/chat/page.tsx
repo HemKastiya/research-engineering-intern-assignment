@@ -65,7 +65,7 @@ export default function ChatPage() {
 
   return (
     <div className="news-section">
-      <SectionHeading kicker="RAG Intelligence" title="Ask the Dataset" />
+      <SectionHeading kicker="Consult the wisdom hidden within the dataset." title="Ask the Oracle" />
       <p className="byline mb-6">
         Semantic retrieval + Gemini 2.5 Flash | Multilingual support | Sources included
       </p>

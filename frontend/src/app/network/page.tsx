@@ -199,7 +199,7 @@ export default function NetworkPage() {
 
   return (
     <div className="news-section">
-      <SectionHeading kicker="Graph Analysis" title="Author Interaction Network" />
+      <SectionHeading kicker="No mischief goes unnoticed." title="The Marauder’s Network" />
 
       <GraphControls
         keyword={keywordInput}

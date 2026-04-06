@@ -296,7 +296,7 @@ export default function TimeSeriesPage() {
 
   return (
     <div className="news-section">
-      <SectionHeading kicker="Trend Intelligence" title="Interactive Time-Series Analytics" />
+      <SectionHeading kicker="Revisit the past. Reveal the trends." title="The Time Turner" />
 
       <div className="press-card press-card-brief mb-6">
         <p className="kicker mb-3">Filters</p>
