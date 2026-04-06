@@ -11,11 +11,12 @@ This repository is a full-stack submission for the SimPPL Research Engineering I
 - Prompt log: `will be added by 7 April 2026`
 - Dataset source: `Same as the one provided in INSTRUCTIONS.md`
 
+
 ## Screenshots
-
-```md
-
-```
+<img width="2547" height="1395" alt="Screenshot 2026-04-06 213751" src="https://github.com/user-attachments/assets/f7af4395-dd87-45d5-92cd-26d2af0fbe98" />
+<img width="2547" height="1401" alt="Screenshot 2026-04-06 213802" src="https://github.com/user-attachments/assets/13296a75-1577-420d-ab5f-644eb2abc146" />
+<img width="2536" height="1394" alt="Screenshot 2026-04-06 213854" src="https://github.com/user-attachments/assets/9699cdda-93b8-4168-a359-6e5171aad01a" />
+<img width="2541" height="1400" alt="Screenshot 2026-04-06 213946" src="https://github.com/user-attachments/assets/3030d340-caab-4730-b3ff-2539f57feba1" />
 
 ## Project Summary
 
