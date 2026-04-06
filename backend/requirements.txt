@@ -3,7 +3,7 @@ fastapi
 uvicorn
 motor
 chromadb
-sentence-transformers
+fastembed
 pydantic
 pydantic-settings
 huggingface-hub

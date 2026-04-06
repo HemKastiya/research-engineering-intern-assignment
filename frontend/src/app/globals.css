@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -18,10 +19,12 @@
   --font-family-inter: "Inter", system-ui, sans-serif;
   --font-family-mono: "JetBrains Mono", "Fira Code", monospace;
 }
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @layer base {
-  
-  *, *::before, *::after {
+
+  *,
+  *::before,
+  *::after {
     box-sizing: border-box;
   }
 
@@ -39,13 +42,11 @@
     background:
       radial-gradient(circle at 20% -10%, rgba(255, 255, 255, 0.82), transparent 35%),
       radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.5), transparent 30%),
-      repeating-linear-gradient(
-        0deg,
+      repeating-linear-gradient(0deg,
         rgba(26, 26, 24, 0.015),
         rgba(26, 26, 24, 0.015) 1px,
         transparent 1px,
-        transparent 4px
-      ),
+        transparent 4px),
       var(--color-paper);
   }
 
@@ -63,15 +64,28 @@
   }
 
   /* Custom scrollbar */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: var(--color-wash); }
-  ::-webkit-scrollbar-thumb { background: var(--color-rule); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-wash);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-rule);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted);
+  }
 }
 
 @layer components {
   .edition-shell {
-    
+
     margin: 0 auto;
     position: relative;
     background: rgba(247, 243, 236, 0.96);
@@ -345,8 +359,13 @@
   }
 
   @keyframes skeleton-shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 200% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
   }
 
   /* Blinking cursor for streaming */
@@ -357,8 +376,15 @@
   }
 
   @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0;
+    }
   }
 }
 

@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /app/.cache && chmod -R 777 /app/.cache
 
 # Pre-download embedding model during build
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
 
 # Copy application
 COPY . .
