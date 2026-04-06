@@ -2,7 +2,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install chromadb (includes uvicorn)
-RUN pip install --no-cache-dir chromadb
+RUN pip install --no-cache-dir chromadb fastapi
 
 # Create data directory (even if not persistent, chroma needs it)
 RUN mkdir -p /data && chmod -R 777 /data
