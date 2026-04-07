@@ -7,8 +7,8 @@ This repository is a full-stack submission for the SimPPL Research Engineering I
 ## Submission Links
 
 - Live dashboard: `https://the-daily-query.vercel.app/`
-- Demo video: `will be added by 7 April 2026`
-- Prompt log: `will be added by 7 April 2026`
+- Demo video: `https://drive.google.com/file/d/1An0UQmuWUH6t1_Ykbd6LjLSdNSeQMbED/view?usp=drive_link`
+- Prompt log: `Hem-Kastiya-prompts.md`
 - Dataset source: `Same as the one provided in INSTRUCTIONS.md`
 
 ## Screenshots
